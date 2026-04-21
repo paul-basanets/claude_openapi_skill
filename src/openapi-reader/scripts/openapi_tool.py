@@ -2,9 +2,13 @@
 """OpenAPI spec query tool — stdlib only, no dependencies."""
 
 import argparse
+import difflib
 import json
+import re
 import sys
 from pathlib import Path
+
+DEFAULT_DEPTH = 3
 
 
 def load_spec(spec_path: str) -> dict:
@@ -40,8 +44,8 @@ def resolve_ref(ref: str, spec: dict) -> dict:
     return node
 
 
-def resolve_refs(obj, spec: dict, seen: frozenset = frozenset(), depth: int = 0):
-    if depth >= 3:
+def resolve_refs(obj, spec: dict, seen: frozenset = frozenset(), depth: int = 0, max_depth: int = DEFAULT_DEPTH):
+    if depth >= max_depth:
         return obj
     if isinstance(obj, dict):
         if "$ref" in obj:
@@ -52,10 +56,10 @@ def resolve_refs(obj, spec: dict, seen: frozenset = frozenset(), depth: int = 0)
                 return {"$ref": ref}
             resolved = resolve_ref(ref, spec)
             merged = {**resolved, **{k: v for k, v in obj.items() if k != "$ref"}}
-            return resolve_refs(merged, spec, seen | {ref}, depth + 1)
-        return {k: resolve_refs(v, spec, seen, depth) for k, v in obj.items()}
+            return resolve_refs(merged, spec, seen | {ref}, depth + 1, max_depth)
+        return {k: resolve_refs(v, spec, seen, depth, max_depth) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [resolve_refs(item, spec, seen, depth) for item in obj]
+        return [resolve_refs(item, spec, seen, depth, max_depth) for item in obj]
     return obj
 
 
@@ -69,7 +73,72 @@ def _iter_operations(spec: dict):
                 yield path, method, op
 
 
-def cmd_summary(spec: dict) -> None:
+# ---------- compact() — junk-token trimmer ----------
+
+_SEP_RE = re.compile(r"[_\s-]+")
+
+
+def _auto_title(key: str) -> str:
+    return " ".join(p.capitalize() for p in _SEP_RE.split(key) if p)
+
+
+def _is_http_validation_error(node) -> bool:
+    """True if a response entry is the FastAPI 422 boilerplate."""
+    if not isinstance(node, dict):
+        return False
+    content = node.get("content", {})
+    schema = content.get("application/json", {}).get("schema", {})
+    if schema.get("title") == "HTTPValidationError":
+        return True
+    ref = schema.get("$ref", "")
+    return ref.endswith("/HTTPValidationError")
+
+
+def compact(obj, parent_key: str | None = None):
+    """
+    Post-process resolved output to remove low-signal tokens:
+      - collapse anyOf: [T, {type: null}]  →  T + nullable: true
+      - drop title when it auto-derives from the property key
+      - drop empty description: "" and default: ""
+      - drop 422 HTTPValidationError response entries (boilerplate)
+    """
+    if isinstance(obj, dict):
+        branches = obj.get("anyOf")
+        if isinstance(branches, list):
+            non_null = [b for b in branches if not (isinstance(b, dict) and b.get("type") == "null")]
+            if len(non_null) != len(branches) and len(non_null) == 1:
+                merged = {**non_null[0], **{k: v for k, v in obj.items() if k != "anyOf"}}
+                merged["nullable"] = True
+                return compact(merged, parent_key)
+
+        out: dict = {}
+        for k, v in obj.items():
+            if k == "title" and isinstance(v, str) and parent_key and v == _auto_title(parent_key):
+                continue
+            if k == "description" and v == "":
+                continue
+            if k == "default" and v == "":
+                continue
+            if k == "responses" and isinstance(v, dict):
+                out[k] = {
+                    code: compact(resp, parent_key=None)
+                    for code, resp in v.items()
+                    if not (code == "422" and _is_http_validation_error(resp))
+                }
+                continue
+            if k == "properties" and isinstance(v, dict):
+                out[k] = {sk: compact(sv, parent_key=sk) for sk, sv in v.items()}
+                continue
+            out[k] = compact(v, parent_key=None)
+        return out
+    if isinstance(obj, list):
+        return [compact(x, parent_key) for x in obj]
+    return obj
+
+
+# ---------- subcommands ----------
+
+def cmd_summary(spec: dict, compact_mode: bool = False) -> None:
     info = spec.get("info", {})
     schemas = spec.get("components", {}).get("schemas", {})
 
@@ -86,15 +155,25 @@ def cmd_summary(spec: dict) -> None:
         "",
     ]
 
-    for tag in sorted(tag_ops):
-        ops = sorted(tag_ops[tag], key=lambda x: (x[1], x[0]))
-        lines.append(f"## {tag} ({len(ops)})")
-        for method, path, summary in ops:
-            lines.append(f"  {method:<7} {path}  —  {summary}")
-        lines.append("")
-
-    lines.append("## Schemas")
-    lines.append(", ".join(sorted(schemas)))
+    if compact_mode:
+        for tag in sorted(tag_ops):
+            ops = sorted(tag_ops[tag], key=lambda x: (x[1], x[0]))
+            lines.append(f"## {tag} ({len(ops)})")
+            paths = sorted({path for _, path, _ in ops})
+            for path in paths:
+                methods = sorted({m for m, p, _ in ops if p == path})
+                lines.append(f"  {'/'.join(methods):<20} {path}")
+            lines.append("")
+        lines.append(f"## Schemas ({len(schemas)}): run `schema NAME` to fetch one.")
+    else:
+        for tag in sorted(tag_ops):
+            ops = sorted(tag_ops[tag], key=lambda x: (x[1], x[0]))
+            lines.append(f"## {tag} ({len(ops)})")
+            for method, path, summary in ops:
+                lines.append(f"  {method:<7} {path}  —  {summary}")
+            lines.append("")
+        lines.append("## Schemas")
+        lines.append(", ".join(sorted(schemas)))
 
     print("\n".join(lines))
 
@@ -118,15 +197,13 @@ def cmd_list(spec: dict, tag: str | None = None, method: str | None = None) -> N
     print(json.dumps(results, indent=2))
 
 
-def cmd_endpoint(spec: dict, method: str, path: str) -> None:
+def _build_endpoint(spec: dict, method: str, path: str, max_depth: int) -> dict | None:
     path_item = spec.get("paths", {}).get(path)
     if path_item is None:
-        print(json.dumps({"error": f"Path not found: {path}"}))
-        sys.exit(1)
+        return None
     op = path_item.get(method.lower())
     if op is None:
-        print(json.dumps({"error": f"Method {method.upper()} not found at {path}"}))
-        sys.exit(1)
+        return None
 
     path_params = path_item.get("parameters", [])
     op_params = op.get("parameters", [])
@@ -154,24 +231,46 @@ def cmd_endpoint(spec: dict, method: str, path: str) -> None:
         "description": op.get("description", ""),
         "operationId": op.get("operationId", ""),
         "tags": op.get("tags", []),
-        "parameters": resolve_refs(final_params, spec),
+        "parameters": resolve_refs(final_params, spec, max_depth=max_depth),
         "security": op.get("security"),
     }
     if "requestBody" in op:
-        result["requestBody"] = resolve_refs(op["requestBody"], spec)
-    result["responses"] = resolve_refs(op.get("responses", {}), spec)
+        result["requestBody"] = resolve_refs(op["requestBody"], spec, max_depth=max_depth)
+    result["responses"] = resolve_refs(op.get("responses", {}), spec, max_depth=max_depth)
+    return {k: v for k, v in result.items() if v is not None}
 
-    print(json.dumps({k: v for k, v in result.items() if v is not None}, indent=2))
+
+def cmd_endpoint(spec: dict, method: str, path: str, *, raw: bool, max_depth: int) -> None:
+    if path not in spec.get("paths", {}):
+        print(json.dumps({"error": f"Path not found: {path}"}))
+        sys.exit(1)
+    if spec["paths"][path].get(method.lower()) is None:
+        print(json.dumps({"error": f"Method {method.upper()} not found at {path}"}))
+        sys.exit(1)
+
+    result = _build_endpoint(spec, method, path, max_depth)
+    assert result is not None
+    if not raw:
+        result = compact(result)
+    print(json.dumps(result, indent=2))
 
 
-def cmd_schema(spec: dict, name: str) -> None:
+def cmd_schema(spec: dict, name: str, *, raw: bool, max_depth: int) -> None:
     schemas = spec.get("components", {}).get("schemas", {})
     schema = schemas.get(name)
     if schema is None:
         available = sorted(schemas)
-        print(json.dumps({"error": f"Schema not found: {name}", "available_count": len(available), "available": available}))
+        suggestions = difflib.get_close_matches(name, available, n=5, cutoff=0.6)
+        err = {"error": f"Schema not found: {name}", "available_count": len(available)}
+        if suggestions:
+            err["did_you_mean"] = suggestions
+        err["hint"] = "Run `list` then grep, or re-call with an exact name."
+        print(json.dumps(err))
         sys.exit(1)
-    print(json.dumps(resolve_refs(schema, spec), indent=2))
+    resolved = resolve_refs(schema, spec, max_depth=max_depth)
+    if not raw:
+        resolved = compact(resolved, parent_key=name)
+    print(json.dumps(resolved, indent=2))
 
 
 def cmd_search(spec: dict, query: str) -> None:
@@ -219,10 +318,10 @@ def cmd_search(spec: dict, query: str) -> None:
     print(json.dumps(results, indent=2))
 
 
-def cmd_operation(spec: dict, operation_id: str) -> None:
+def cmd_operation(spec: dict, operation_id: str, *, raw: bool, max_depth: int) -> None:
     for path, method, op in _iter_operations(spec):
         if op.get("operationId") == operation_id:
-            cmd_endpoint(spec, method, path)
+            cmd_endpoint(spec, method, path, raw=raw, max_depth=max_depth)
             return
 
     available = sorted(
@@ -230,23 +329,29 @@ def cmd_operation(spec: dict, operation_id: str) -> None:
         for _, _, op in _iter_operations(spec)
         if op.get("operationId")
     )
-    print(json.dumps({
-        "error": f"operationId not found: {operation_id}",
-        "available_count": len(available),
-        "available": available,
-    }))
+    suggestions = difflib.get_close_matches(operation_id, available, n=5, cutoff=0.6)
+    err = {"error": f"operationId not found: {operation_id}", "available_count": len(available)}
+    if suggestions:
+        err["did_you_mean"] = suggestions
+    err["hint"] = "Run `list` to see operationIds, or use `endpoint METHOD PATH`."
+    print(json.dumps(err))
     sys.exit(1)
 
 
 def main() -> None:
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("--spec", default="openapi.json", help="Path to OpenAPI JSON spec (default: openapi.json)")
+    pre.add_argument("--raw", action="store_true", help="Disable compact trimming; emit raw OpenAPI output")
+    pre.add_argument("--depth", type=int, default=DEFAULT_DEPTH,
+                     help=f"Max $ref resolution depth (default: {DEFAULT_DEPTH})")
     pre_args, remaining = pre.parse_known_args()
 
     parser = argparse.ArgumentParser(description="Query an OpenAPI spec efficiently")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("summary", help="Compact API overview: endpoints by tag, schema names")
+    sum_p = sub.add_parser("summary", help="Compact API overview: endpoints by tag, schema names")
+    sum_p.add_argument("--compact", action="store_true",
+                       help="Ultra-short: paths-only list, no summaries, no schema names")
 
     list_p = sub.add_parser("list", help="List endpoints as JSON (optional filters)")
     list_p.add_argument("--tag", help="Filter by tag name")
@@ -267,21 +372,23 @@ def main() -> None:
 
     args = parser.parse_args(remaining)
     args.spec = pre_args.spec
+    args.raw = pre_args.raw
+    args.depth = pre_args.depth
     spec = load_spec(args.spec)
 
     match args.command:
         case "summary":
-            cmd_summary(spec)
+            cmd_summary(spec, compact_mode=args.compact)
         case "list":
             cmd_list(spec, tag=args.tag, method=args.method)
         case "endpoint":
-            cmd_endpoint(spec, args.method, args.path)
+            cmd_endpoint(spec, args.method, args.path, raw=args.raw, max_depth=args.depth)
         case "schema":
-            cmd_schema(spec, args.name)
+            cmd_schema(spec, args.name, raw=args.raw, max_depth=args.depth)
         case "search":
             cmd_search(spec, " ".join(args.query))
         case "operation":
-            cmd_operation(spec, args.operation_id)
+            cmd_operation(spec, args.operation_id, raw=args.raw, max_depth=args.depth)
 
 
 if __name__ == "__main__":
