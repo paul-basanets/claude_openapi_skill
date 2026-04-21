@@ -20,6 +20,7 @@ Query OpenAPI specs without loading the full file into context. Use `uv run scri
 | `endpoint METHOD PATH` | `[--spec PATH]` | Full operation: params, request body, responses ($refs resolved) |
 | `schema NAME` | `[--spec PATH]` | Schema definition ($refs resolved) |
 | `search QUERY` | `[--spec PATH]` | Matching endpoints and schemas |
+| `operation OPERATION_ID` | `[--spec PATH]` | Full operation detail (same output as `endpoint`) looked up by operationId |
 
 ## Strategy
 

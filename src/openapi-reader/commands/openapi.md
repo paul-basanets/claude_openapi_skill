@@ -1,6 +1,6 @@
 ---
 name: openapi
-description: Query the OpenAPI spec in this project. Usage: /openapi summary | list [--tag TAG] [--method METHOD] | endpoint METHOD PATH | schema NAME | search QUERY
+description: Query the OpenAPI spec in this project. Usage: /openapi summary | list [--tag TAG] [--method METHOD] | endpoint METHOD PATH | schema NAME | search QUERY | operation OPERATION_ID
 allowed-tools:
   - Bash
 ---

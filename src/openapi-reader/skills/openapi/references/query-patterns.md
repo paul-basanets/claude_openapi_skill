@@ -26,3 +26,12 @@ uv run scripts/openapi_tool.py schema GuardrailResponse
 uv run scripts/openapi_tool.py schema AddGuardrailRequest
 ```
 Returns the full schema with `$ref`s resolved. If the name is unknown, the error response lists all 160 available schemas.
+
+## 5. Look up an endpoint by operationId
+
+When code references an `operationId` and you don't know the path:
+```bash
+uv run scripts/openapi_tool.py operation add_guardrail_api_guardrails_add_post
+uv run scripts/openapi_tool.py operation getGuardrail
+```
+Returns the same full output as `endpoint`. If not found, the error lists all available operationIds.

@@ -1,4 +1,5 @@
 {
   "name": "openapi-reader",
+  "version": "0.2.0",
   "description": "Token-efficient, on-demand access to OpenAPI specifications via a Python CLI tool, skill guidance, and /openapi slash command."
 }

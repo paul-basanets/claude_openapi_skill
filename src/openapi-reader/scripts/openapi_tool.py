@@ -14,10 +14,17 @@ def load_spec(spec_path: str) -> dict:
         sys.exit(1)
     with open(path) as f:
         try:
-            return json.load(f)
+            spec = json.load(f)
         except json.JSONDecodeError as e:
             print(json.dumps({"error": f"Invalid JSON in spec file: {spec_path}: {e}"}))
             sys.exit(1)
+    version_str = spec.get("openapi", spec.get("swagger", ""))
+    if not str(version_str).startswith("3"):
+        print(
+            json.dumps({"warning": f"Spec version '{version_str}' is not OpenAPI 3.x; output may be incorrect"}),
+            file=sys.stderr,
+        )
+    return spec
 
 
 def resolve_ref(ref: str, spec: dict) -> dict:
@@ -25,8 +32,11 @@ def resolve_ref(ref: str, spec: dict) -> dict:
         return {"$ref": ref}
     parts = ref[2:].split("/")
     node = spec
-    for part in parts:
-        node = node[part]
+    try:
+        for part in parts:
+            node = node[part]
+    except KeyError:
+        return {"error": f"Unresolvable $ref: {ref}"}
     return node
 
 
@@ -95,7 +105,7 @@ def cmd_list(spec: dict, tag: str | None = None, method: str | None = None) -> N
         if method and m.upper() != method.upper():
             continue
         tags = op.get("tags", [])
-        if tag and tag not in tags:
+        if tag and not any(tag.lower() in t.lower() for t in tags):
             continue
         results.append({
             "path": path,
@@ -118,6 +128,25 @@ def cmd_endpoint(spec: dict, method: str, path: str) -> None:
         print(json.dumps({"error": f"Method {method.upper()} not found at {path}"}))
         sys.exit(1)
 
+    path_params = path_item.get("parameters", [])
+    op_params = op.get("parameters", [])
+    merged_params: dict[tuple, dict] = {}
+    path_extras: list = []
+    for p in path_params:
+        key = (p.get("name"), p.get("in"))
+        if key == (None, None):
+            path_extras.append(p)
+        else:
+            merged_params[key] = p
+    op_extras: list = []
+    for p in op_params:
+        key = (p.get("name"), p.get("in"))
+        if key == (None, None):
+            op_extras.append(p)
+        else:
+            merged_params[key] = p
+    final_params = path_extras + list(merged_params.values()) + op_extras
+
     result: dict = {
         "path": path,
         "method": method.upper(),
@@ -125,7 +154,7 @@ def cmd_endpoint(spec: dict, method: str, path: str) -> None:
         "description": op.get("description", ""),
         "operationId": op.get("operationId", ""),
         "tags": op.get("tags", []),
-        "parameters": resolve_refs(op.get("parameters", []), spec),
+        "parameters": resolve_refs(final_params, spec),
         "security": op.get("security"),
     }
     if "requestBody" in op:
@@ -147,24 +176,31 @@ def cmd_schema(spec: dict, name: str) -> None:
 
 def cmd_search(spec: dict, query: str) -> None:
     q = query.lower()
+    terms = q.split()
     results = []
 
     for path, method, op in _iter_operations(spec):
+        param_texts = []
+        for p in op.get("parameters", []):
+            param_texts.append(p.get("name", ""))
+            param_texts.append(p.get("description", ""))
         haystack = " ".join([
             path,
             op.get("summary", ""),
             op.get("description", ""),
             op.get("operationId", ""),
             *op.get("tags", []),
+            *param_texts,
         ]).lower()
-        if q in haystack:
-            results.append({
-                "type": "endpoint",
-                "method": method.upper(),
-                "path": path,
-                "summary": op.get("summary", ""),
-                "tags": op.get("tags", []),
-            })
+        if not all(t in haystack for t in terms):
+            continue
+        results.append({
+            "type": "endpoint",
+            "method": method.upper(),
+            "path": path,
+            "summary": op.get("summary", ""),
+            "tags": op.get("tags", []),
+        })
 
     for name, schema in spec.get("components", {}).get("schemas", {}).items():
         haystack = " ".join([
@@ -172,14 +208,34 @@ def cmd_search(spec: dict, query: str) -> None:
             schema.get("description", ""),
             *schema.get("properties", {}).keys(),
         ]).lower()
-        if q in haystack:
-            results.append({
-                "type": "schema",
-                "name": name,
-                "description": schema.get("description", ""),
-            })
+        if not all(t in haystack for t in terms):
+            continue
+        results.append({
+            "type": "schema",
+            "name": name,
+            "description": schema.get("description", ""),
+        })
 
     print(json.dumps(results, indent=2))
+
+
+def cmd_operation(spec: dict, operation_id: str) -> None:
+    for path, method, op in _iter_operations(spec):
+        if op.get("operationId") == operation_id:
+            cmd_endpoint(spec, method, path)
+            return
+
+    available = sorted(
+        op.get("operationId", "")
+        for _, _, op in _iter_operations(spec)
+        if op.get("operationId")
+    )
+    print(json.dumps({
+        "error": f"operationId not found: {operation_id}",
+        "available_count": len(available),
+        "available": available,
+    }))
+    sys.exit(1)
 
 
 def main() -> None:
@@ -206,6 +262,9 @@ def main() -> None:
     sr = sub.add_parser("search", help="Full-text search across endpoints and schemas")
     sr.add_argument("query", nargs="+", help="Search terms")
 
+    op_p = sub.add_parser("operation", help="Full operation detail looked up by operationId")
+    op_p.add_argument("operation_id", help="operationId, e.g. add_guardrail_api_guardrails_add_post")
+
     args = parser.parse_args(remaining)
     args.spec = pre_args.spec
     spec = load_spec(args.spec)
@@ -221,6 +280,8 @@ def main() -> None:
             cmd_schema(spec, args.name)
         case "search":
             cmd_search(spec, " ".join(args.query))
+        case "operation":
+            cmd_operation(spec, args.operation_id)
 
 
 if __name__ == "__main__":
