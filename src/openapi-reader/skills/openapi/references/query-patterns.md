@@ -27,7 +27,24 @@ uv run scripts/openapi_tool.py --depth 1 endpoint POST /api/guardrails/add   # s
 uv run scripts/openapi_tool.py --raw endpoint POST /api/guardrails/add       # untrimmed
 ```
 
-Returns parameters, request body, and responses with `$ref`s resolved inline. The default output drops Pydantic auto-titles, collapses `anyOf: [T, {type: null}]` into `nullable: true`, strips empty `description`/`default` fields, and removes the generic 422 `HTTPValidationError` branch (~45% smaller than `--raw`).
+Returns parameters, request body, and responses with `$ref`s resolved inline, encoded as TOON. The default output drops Pydantic auto-titles, collapses `anyOf: [T, {type: null}]` into `nullable: true`, strips empty `description`/`default` fields, and removes the generic 422 `HTTPValidationError` branch. TOON encoding additionally saves ~20–35% tokens vs the equivalent JSON. Output shape:
+
+```
+path: /api/guardrails/add
+method: POST
+parameters[0]:
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        properties:
+          topic:
+            type: string
+responses:
+  "200":
+    description: Successful Response
+```
 
 ## 4. Understand a request or response schema
 

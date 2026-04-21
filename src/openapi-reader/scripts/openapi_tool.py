@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""OpenAPI spec query tool — stdlib only, no dependencies."""
+"""OpenAPI spec query tool — stdlib only, no dependencies.
+
+Output format: TOON (Token-Oriented Object Notation) — see
+https://github.com/toon-format/spec for the format rules. Encoder is inline
+below to preserve the zero-dep policy. Error payloads stay as single-line
+JSON for tiny-object parse simplicity.
+"""
 
 import argparse
 import difflib
@@ -71,6 +77,164 @@ def _iter_operations(spec: dict):
             op = path_item.get(method)
             if op is not None:
                 yield path, method, op
+
+
+# ---------- TOON encoder (stdlib, subset of the spec we need) ----------
+
+_TOON_RESERVED_RE = re.compile(r'[:"\\\[\]{},\n\r\t]')
+_TOON_NUMERIC_RE = re.compile(r'^-?\d+(\.\d+)?([eE][+-]?\d+)?$')
+
+
+def _toon_needs_quote(s: str) -> bool:
+    if s == "":
+        return True
+    if s[0].isspace() or s[-1].isspace():
+        return True
+    if s in ("true", "false", "null"):
+        return True
+    if _TOON_NUMERIC_RE.match(s):
+        return True
+    if len(s) >= 2 and s[0] == "0" and s[1].isdigit():
+        return True
+    if s[0] == "-":
+        return True
+    return bool(_TOON_RESERVED_RE.search(s))
+
+
+def _toon_quote_str(s: str) -> str:
+    escaped = (
+        s.replace("\\", "\\\\")
+         .replace('"', '\\"')
+         .replace("\n", "\\n")
+         .replace("\r", "\\r")
+         .replace("\t", "\\t")
+    )
+    return '"' + escaped + '"'
+
+
+def _toon_prim(v) -> str:
+    if v is None:
+        return "null"
+    if v is True:
+        return "true"
+    if v is False:
+        return "false"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        if v != v or v in (float("inf"), float("-inf")):
+            return _toon_quote_str(repr(v))
+        if v.is_integer():
+            return str(int(v))
+        return repr(v)
+    s = v if isinstance(v, str) else str(v)
+    return _toon_quote_str(s) if _toon_needs_quote(s) else s
+
+
+def _toon_key(k) -> str:
+    s = k if isinstance(k, str) else str(k)
+    return _toon_quote_str(s) if _toon_needs_quote(s) else s
+
+
+def _is_primitive(v) -> bool:
+    return v is None or isinstance(v, (bool, int, float, str))
+
+
+def _toon_field(key, value, lines: list, prefix: str, nested_depth: int, pad_unit: str) -> None:
+    """Emit `<prefix>key: value`. Nested content goes at `nested_depth`."""
+    k = _toon_key(key)
+    if _is_primitive(value):
+        lines.append(f"{prefix}{k}: {_toon_prim(value)}")
+        return
+    if isinstance(value, dict):
+        lines.append(f"{prefix}{k}:")
+        if not value:
+            return
+        child_pad = pad_unit * nested_depth
+        for sk, sv in value.items():
+            _toon_field(sk, sv, lines, child_pad, nested_depth + 1, pad_unit)
+        return
+    if isinstance(value, list):
+        _toon_array(k, value, lines, prefix, nested_depth, pad_unit)
+        return
+    lines.append(f"{prefix}{k}: {_toon_prim(value)}")
+
+
+def _toon_array(key_str: str, items: list, lines: list, prefix: str,
+                nested_depth: int, pad_unit: str) -> None:
+    """Emit an array header and body.
+
+    `prefix` is the start of the header line (including any indent + dash).
+    `key_str` is the (pre-quoted) key or "" for root/anonymous arrays.
+    Nested content goes at `nested_depth`.
+    """
+    n = len(items)
+    head = f"{prefix}{key_str}[{n}]"
+
+    if n == 0:
+        lines.append(f"{head}:")
+        return
+
+    if all(_is_primitive(it) for it in items):
+        vals = ",".join(_toon_prim(it) for it in items)
+        lines.append(f"{head}: {vals}")
+        return
+
+    if all(isinstance(it, dict) for it in items):
+        first_keys = list(items[0].keys())
+        first_set = set(first_keys)
+        if all(set(it.keys()) == first_set for it in items) and all(
+            _is_primitive(it[k]) for it in items for k in first_keys
+        ):
+            fields = ",".join(_toon_key(k) for k in first_keys)
+            lines.append(f"{head}{{{fields}}}:")
+            row_pad = pad_unit * nested_depth
+            for it in items:
+                row = ",".join(_toon_prim(it[k]) for k in first_keys)
+                lines.append(f"{row_pad}{row}")
+            return
+
+    lines.append(f"{head}:")
+    item_pad = pad_unit * nested_depth
+    for it in items:
+        _toon_list_item(it, lines, item_pad, nested_depth, pad_unit)
+
+
+def _toon_list_item(item, lines: list, pad: str, depth: int, pad_unit: str) -> None:
+    """Emit a single list item prefixed with `- ` at column len(pad)."""
+    if _is_primitive(item):
+        lines.append(f"{pad}- {_toon_prim(item)}")
+        return
+    if isinstance(item, dict):
+        if not item:
+            lines.append(f"{pad}-")
+            return
+        keys = list(item.keys())
+        first_k, first_v = keys[0], item[keys[0]]
+        _toon_field(first_k, first_v, lines, prefix=f"{pad}- ",
+                    nested_depth=depth + 1, pad_unit=pad_unit)
+        cont_pad = pad_unit * (depth + 1)
+        for k in keys[1:]:
+            _toon_field(k, item[k], lines, cont_pad, depth + 2, pad_unit)
+        return
+    if isinstance(item, list):
+        _toon_array("", item, lines, f"{pad}- ", depth + 1, pad_unit)
+        return
+    lines.append(f"{pad}- {_toon_prim(item)}")
+
+
+def _toon_dumps(obj, indent: int = 2) -> str:
+    lines: list[str] = []
+    pad_unit = " " * indent
+    if isinstance(obj, dict):
+        if obj:
+            for k, v in obj.items():
+                _toon_field(k, v, lines, "", 1, pad_unit)
+    elif isinstance(obj, list):
+        _toon_array("", obj, lines, "", 1, pad_unit)
+    else:
+        lines.append(_toon_prim(obj))
+    return "\n".join(lines)
 
 
 # ---------- compact() — junk-token trimmer ----------
@@ -194,7 +358,7 @@ def cmd_list(spec: dict, tag: str | None = None, method: str | None = None) -> N
             "tags": tags,
         })
     results.sort(key=lambda x: (x["path"], x["method"]))
-    print(json.dumps(results, indent=2))
+    print(_toon_dumps(results))
 
 
 def _build_endpoint(spec: dict, method: str, path: str, max_depth: int) -> dict | None:
@@ -252,7 +416,7 @@ def cmd_endpoint(spec: dict, method: str, path: str, *, raw: bool, max_depth: in
     assert result is not None
     if not raw:
         result = compact(result)
-    print(json.dumps(result, indent=2))
+    print(_toon_dumps(result))
 
 
 def cmd_schema(spec: dict, name: str, *, raw: bool, max_depth: int) -> None:
@@ -270,7 +434,7 @@ def cmd_schema(spec: dict, name: str, *, raw: bool, max_depth: int) -> None:
     resolved = resolve_refs(schema, spec, max_depth=max_depth)
     if not raw:
         resolved = compact(resolved, parent_key=name)
-    print(json.dumps(resolved, indent=2))
+    print(_toon_dumps(resolved))
 
 
 def cmd_search(spec: dict, query: str) -> None:
@@ -315,7 +479,7 @@ def cmd_search(spec: dict, query: str) -> None:
             "description": schema.get("description", ""),
         })
 
-    print(json.dumps(results, indent=2))
+    print(_toon_dumps(results))
 
 
 def cmd_operation(spec: dict, operation_id: str, *, raw: bool, max_depth: int) -> None:

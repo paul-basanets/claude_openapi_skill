@@ -26,6 +26,11 @@ TOOL = ROOT / "src" / "openapi-reader" / "scripts" / "openapi_tool.py"
 SPEC = ROOT / "openapi.json"
 REPORT = ROOT / "docs" / "EVAL.md"
 
+# Import the tool in-process so we can inspect pre-emission Python structures
+# without subprocess-regex games against a format-dependent output layer.
+sys.path.insert(0, str(TOOL.parent))
+import openapi_tool as tool  # noqa: E402
+
 
 def run(args: list[str], cwd: Path = ROOT) -> tuple[int, str, str, float]:
     t0 = time.perf_counter()
@@ -120,62 +125,19 @@ def run_scenarios() -> list[ScenarioResult]:
     return results
 
 
-# ---------- Part B: population-wide junk analysis ----------
-
-ANYOF_NULL_RE = re.compile(
-    r'"anyOf"\s*:\s*\[[^\[\]]*?"type"\s*:\s*"null"',
-    re.DOTALL,
-)
-TITLE_RE = re.compile(r'"title"\s*:\s*"([^"]+)"')
-EMPTY_DESC_RE = re.compile(r'"description"\s*:\s*""')
-EMPTY_DEFAULT_STR_RE = re.compile(r'"default"\s*:\s*""')
-HTTP_VALIDATION_RE = re.compile(r'HTTPValidationError')
-
-
-def is_autoderived_title(title: str, sibling_key: str | None) -> bool:
-    """Pydantic auto-titles look like 'Topic' for key 'topic',
-    'Session Id' for 'session_id', 'En' for 'en'. Heuristic: if
-    sibling key's title-case matches the title, count it as auto."""
-    if not sibling_key:
-        return False
-    auto = " ".join(p.capitalize() for p in re.split(r"[_\s-]+", sibling_key) if p)
-    return auto == title
-
-
-def count_autoderived_titles(text: str) -> int:
-    """Parse JSON once, walk the tree, count titles that match their
-    parent property key auto-derivation. Falls back to 0 on parse errors."""
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return 0
-    count = 0
-
-    def walk(node, parent_key=None):
-        nonlocal count
-        if isinstance(node, dict):
-            t = node.get("title")
-            if isinstance(t, str) and is_autoderived_title(t, parent_key):
-                count += 1
-            for k, v in node.items():
-                if k == "properties" and isinstance(v, dict):
-                    for sub_k, sub_v in v.items():
-                        walk(sub_v, parent_key=sub_k)
-                else:
-                    walk(v, parent_key=None)
-        elif isinstance(node, list):
-            for item in node:
-                walk(item, parent_key=parent_key)
-
-    walk(data)
-    return count
+# ---------- Part B: population-wide junk-token analysis ----------
+#
+# The junk categories are properties of the upstream spec (not the emission
+# format), so we measure them on the in-memory Python structures returned by
+# the tool's internal builders, not via regex over the serialized output.
 
 
 @dataclass
 class OutputStats:
     kind: str               # 'endpoint' | 'schema'
     name: str
-    bytes_out: int
+    bytes_raw: int          # --raw TOON bytes
+    bytes_compact: int      # default (compact) TOON bytes
     titles_total: int
     titles_auto: int
     anyof_null: int
@@ -184,43 +146,106 @@ class OutputStats:
     httpvalidation: int
 
 
-def measure_all_endpoints(listing: list[dict]) -> list[OutputStats]:
+_SEP_RE = re.compile(r"[_\s-]+")
+
+
+def _auto_title(key: str) -> str:
+    return " ".join(p.capitalize() for p in _SEP_RE.split(key) if p)
+
+
+def analyze_junk(obj, parent_key: str | None = None) -> dict[str, int]:
+    """Walk a resolved (pre-compact) Python structure and count junk markers."""
+    counts = {
+        "titles_total": 0,
+        "titles_auto": 0,
+        "anyof_null": 0,
+        "empty_desc": 0,
+        "empty_default_str": 0,
+        "httpvalidation": 0,
+    }
+
+    def walk(node, pkey):
+        if isinstance(node, dict):
+            branches = node.get("anyOf")
+            if isinstance(branches, list) and any(
+                isinstance(b, dict) and b.get("type") == "null" for b in branches
+            ):
+                counts["anyof_null"] += 1
+            t = node.get("title")
+            if isinstance(t, str):
+                counts["titles_total"] += 1
+                if pkey and t == _auto_title(pkey):
+                    counts["titles_auto"] += 1
+            if node.get("description") == "":
+                counts["empty_desc"] += 1
+            if node.get("default") == "":
+                counts["empty_default_str"] += 1
+            schema_in_content = (
+                node.get("content", {}).get("application/json", {}).get("schema", {})
+                if isinstance(node.get("content"), dict)
+                else {}
+            )
+            if isinstance(schema_in_content, dict):
+                if schema_in_content.get("title") == "HTTPValidationError":
+                    counts["httpvalidation"] += 1
+                ref = schema_in_content.get("$ref", "")
+                if isinstance(ref, str) and ref.endswith("/HTTPValidationError"):
+                    counts["httpvalidation"] += 1
+            for k, v in node.items():
+                if k == "properties" and isinstance(v, dict):
+                    for sk, sv in v.items():
+                        walk(sv, sk)
+                else:
+                    walk(v, None)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item, pkey)
+
+    walk(obj, parent_key)
+    return counts
+
+
+def measure_all_endpoints(spec: dict) -> list[OutputStats]:
     stats: list[OutputStats] = []
-    for e in listing:
-        code, out, _, _ = run(["--raw", "endpoint", e["method"], e["path"]])
-        if code != 0:
+    for path, method, _ in tool._iter_operations(spec):
+        code_r, out_r, _, _ = run(["--raw", "endpoint", method.upper(), path])
+        if code_r != 0:
             continue
+        code_c, out_c, _, _ = run(["endpoint", method.upper(), path])
+        if code_c != 0:
+            continue
+        raw_obj = tool._build_endpoint(spec, method, path, max_depth=tool.DEFAULT_DEPTH)
+        junk = analyze_junk(raw_obj)
         stats.append(OutputStats(
             kind="endpoint",
-            name=f"{e['method']} {e['path']}",
-            bytes_out=len(out),
-            titles_total=len(TITLE_RE.findall(out)),
-            titles_auto=count_autoderived_titles(out),
-            anyof_null=len(ANYOF_NULL_RE.findall(out)),
-            empty_desc=len(EMPTY_DESC_RE.findall(out)),
-            empty_default_str=len(EMPTY_DEFAULT_STR_RE.findall(out)),
-            httpvalidation=len(HTTP_VALIDATION_RE.findall(out)),
+            name=f"{method.upper()} {path}",
+            bytes_raw=len(out_r),
+            bytes_compact=len(out_c),
+            **junk,
         ))
     return stats
 
 
 def measure_all_schemas(spec: dict) -> list[OutputStats]:
     stats: list[OutputStats] = []
-    names = sorted((spec.get("components", {}).get("schemas", {}) or {}).keys())
-    for name in names:
-        code, out, _, _ = run(["--raw", "schema", name])
-        if code != 0:
+    schemas = sorted((spec.get("components", {}).get("schemas", {}) or {}).keys())
+    for name in schemas:
+        code_r, out_r, _, _ = run(["--raw", "schema", name])
+        if code_r != 0:
             continue
+        code_c, out_c, _, _ = run(["schema", name])
+        if code_c != 0:
+            continue
+        raw_obj = tool.resolve_refs(
+            spec["components"]["schemas"][name], spec, max_depth=tool.DEFAULT_DEPTH
+        )
+        junk = analyze_junk(raw_obj, parent_key=name)
         stats.append(OutputStats(
             kind="schema",
             name=name,
-            bytes_out=len(out),
-            titles_total=len(TITLE_RE.findall(out)),
-            titles_auto=count_autoderived_titles(out),
-            anyof_null=len(ANYOF_NULL_RE.findall(out)),
-            empty_desc=len(EMPTY_DESC_RE.findall(out)),
-            empty_default_str=len(EMPTY_DEFAULT_STR_RE.findall(out)),
-            httpvalidation=len(HTTP_VALIDATION_RE.findall(out)),
+            bytes_raw=len(out_r),
+            bytes_compact=len(out_c),
+            **junk,
         ))
     return stats
 
@@ -233,51 +258,6 @@ def pctile(values: list[int], p: float) -> int:
     return vs[k]
 
 
-# ---------- Junk-stripped re-emission for savings estimate ----------
-
-def strip_junk(obj, parent_key: str | None = None):
-    """Aggressive stripper that demonstrates achievable savings:
-       - collapses anyOf:[X, {type:null}] to X + nullable:true
-       - drops redundant titles (auto-derived from key)
-       - drops empty description and empty default ""
-    """
-    if isinstance(obj, dict):
-        # Collapse anyOf: [X, {type: null}]
-        if "anyOf" in obj and isinstance(obj["anyOf"], list):
-            branches = obj["anyOf"]
-            non_null = [b for b in branches if not (isinstance(b, dict) and b.get("type") == "null")]
-            had_null = len(non_null) != len(branches)
-            if had_null and len(non_null) == 1:
-                merged = {**non_null[0], **{k: v for k, v in obj.items() if k != "anyOf"}}
-                merged["nullable"] = True
-                return strip_junk(merged, parent_key)
-
-        out = {}
-        for k, v in obj.items():
-            if k == "title" and isinstance(v, str) and is_autoderived_title(v, parent_key):
-                continue
-            if k == "description" and v == "":
-                continue
-            if k == "default" and v == "":
-                continue
-            if k == "properties" and isinstance(v, dict):
-                out[k] = {sk: strip_junk(sv, sk) for sk, sv in v.items()}
-            else:
-                out[k] = strip_junk(v, parent_key=k)
-        return out
-    if isinstance(obj, list):
-        return [strip_junk(x, parent_key) for x in obj]
-    return obj
-
-
-def stripped_bytes(text: str) -> int | None:
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return None
-    return len(json.dumps(strip_junk(data), indent=2))
-
-
 # ---------- Report rendering ----------
 
 def render_report(scenarios: list[ScenarioResult],
@@ -286,33 +266,20 @@ def render_report(scenarios: list[ScenarioResult],
                   spec_bytes: int,
                   summary_bytes: int) -> str:
     passed = sum(1 for r in scenarios if r.passed)
-    ep_bytes = [s.bytes_out for s in endpoint_stats]
-    sc_bytes = [s.bytes_out for s in schema_stats]
+    ep_raw = [s.bytes_raw for s in endpoint_stats]
+    sc_raw = [s.bytes_raw for s in schema_stats]
+    ep_com = [s.bytes_compact for s in endpoint_stats]
+    sc_com = [s.bytes_compact for s in schema_stats]
 
-    # Compact vs --raw savings (measured end-to-end against the shipped tool)
-    sample = []
-    for s in (endpoint_stats[:5] + schema_stats[:5]):
-        if s.kind == "endpoint":
-            method, path = s.name.split(" ", 1)
-            compact_cmd = ["endpoint", method, path]
-            raw_cmd = ["--raw", "endpoint", method, path]
-        else:
-            compact_cmd = ["schema", s.name]
-            raw_cmd = ["--raw", "schema", s.name]
-        _, raw_out, _, _ = run(raw_cmd)
-        _, compact_out, _, _ = run(compact_cmd)
-        before = len(raw_out)
-        after = len(compact_out)
-        sample.append((s.kind, s.name, before, after))
-    total_before = sum(b for _, _, b, _ in sample) or 1
-    total_after = sum(a for _, _, _, a in sample)
-    savings_pct = round(100 * (1 - total_after / total_before), 1)
+    total_raw = sum(ep_raw) + sum(sc_raw) or 1
+    total_compact = sum(ep_com) + sum(sc_com)
+    savings_pct = round(100 * (1 - total_compact / total_raw), 1)
 
     lines: list[str] = []
     lines.append("# `openapi-reader` Plugin Evaluation")
     lines.append("")
     lines.append(f"_Auto-generated by `evals/run_eval.py`. Fixture: `openapi.json` "
-                 f"({spec_bytes:,} bytes)._")
+                 f"({spec_bytes:,} bytes). Output format: **TOON**._")
     lines.append("")
 
     # TL;DR
@@ -325,7 +292,11 @@ def render_report(scenarios: list[ScenarioResult],
                  f"({summary_bytes:,} vs {spec_bytes:,} bytes).")
     lines.append(f"- **Compact-mode savings (default on)**: compact output is "
                  f"**~{savings_pct}% smaller** than `--raw` "
-                 f"(measured end-to-end on {len(sample)} calls).")
+                 f"(measured end-to-end across all "
+                 f"{len(endpoint_stats)} endpoints and {len(schema_stats)} schemas).")
+    lines.append("- **Output format**: TOON (Token-Oriented Object Notation) "
+                 "for structured responses; plain text for `summary`; "
+                 "single-line JSON for errors.")
     lines.append("")
 
     # Part A
@@ -360,19 +331,30 @@ def render_report(scenarios: list[ScenarioResult],
     lines.append(f"Population: {len(endpoint_stats)} endpoints, "
                  f"{len(schema_stats)} schemas (all covered).")
     lines.append("")
-    lines.append("### Size distribution (bytes, `--raw` mode)")
+    lines.append("### Size distribution (bytes, `--raw` TOON)")
     lines.append("")
     lines.append("| Command | min | p50 | p90 | max | total |")
     lines.append("|---------|-----|-----|-----|-----|-------|")
-    if ep_bytes:
-        lines.append(f"| `endpoint` | {min(ep_bytes):,} | {int(median(ep_bytes)):,} | "
-                     f"{pctile(ep_bytes, 90):,} | {max(ep_bytes):,} | {sum(ep_bytes):,} |")
-    if sc_bytes:
-        lines.append(f"| `schema` | {min(sc_bytes):,} | {int(median(sc_bytes)):,} | "
-                     f"{pctile(sc_bytes, 90):,} | {max(sc_bytes):,} | {sum(sc_bytes):,} |")
+    if ep_raw:
+        lines.append(f"| `endpoint` | {min(ep_raw):,} | {int(median(ep_raw)):,} | "
+                     f"{pctile(ep_raw, 90):,} | {max(ep_raw):,} | {sum(ep_raw):,} |")
+    if sc_raw:
+        lines.append(f"| `schema` | {min(sc_raw):,} | {int(median(sc_raw)):,} | "
+                     f"{pctile(sc_raw, 90):,} | {max(sc_raw):,} | {sum(sc_raw):,} |")
+    lines.append("")
+    lines.append("### Size distribution (bytes, default compact TOON)")
+    lines.append("")
+    lines.append("| Command | min | p50 | p90 | max | total |")
+    lines.append("|---------|-----|-----|-----|-----|-------|")
+    if ep_com:
+        lines.append(f"| `endpoint` | {min(ep_com):,} | {int(median(ep_com)):,} | "
+                     f"{pctile(ep_com, 90):,} | {max(ep_com):,} | {sum(ep_com):,} |")
+    if sc_com:
+        lines.append(f"| `schema` | {min(sc_com):,} | {int(median(sc_com)):,} | "
+                     f"{pctile(sc_com, 90):,} | {max(sc_com):,} | {sum(sc_com):,} |")
     lines.append("")
 
-    # Junk totals
+    # Junk totals (measured on pre-emission Python structures)
     def totals(stats: list[OutputStats]) -> dict[str, int]:
         return {
             "titles_total": sum(s.titles_total for s in stats),
@@ -384,12 +366,15 @@ def render_report(scenarios: list[ScenarioResult],
         }
 
     ep_t, sc_t = totals(endpoint_stats), totals(schema_stats)
-    lines.append("### Junk-category totals (`--raw` mode — what the trimmer strips)")
+    lines.append("### Junk-category totals (what the compact trimmer strips)")
+    lines.append("")
+    lines.append("Measured on the in-memory spec structures before emission — "
+                 "format-independent.")
     lines.append("")
     lines.append("| Category | `endpoint` total | `schema` total | Notes |")
     lines.append("|---|---|---|---|")
     lines.append(f"| `title` fields (all) | {ep_t['titles_total']:,} | {sc_t['titles_total']:,} "
-                 f"| Raw count of `\"title\":` lines. |")
+                 f"| Count of `title` keys on dict nodes. |")
     lines.append(f"| `title` auto-derived | {ep_t['titles_auto']:,} | {sc_t['titles_auto']:,} "
                  f"| Matches parent key (Pydantic artifact). Stripping is safe. |")
     lines.append(f"| `anyOf[T, null]` nullable | {ep_t['anyof_null']:,} | {sc_t['anyof_null']:,} "
@@ -403,47 +388,38 @@ def render_report(scenarios: list[ScenarioResult],
     lines.append("")
 
     # Savings sample
-    lines.append("### Compact vs `--raw` — measured savings")
+    lines.append("### Compact vs `--raw` — top-10 sample")
     lines.append("")
+    sample = sorted(endpoint_stats, key=lambda s: s.bytes_raw, reverse=True)[:5] + \
+             sorted(schema_stats, key=lambda s: s.bytes_raw, reverse=True)[:5]
     lines.append("| Kind | Name | Raw (B) | Compact (B) | Saved |")
     lines.append("|---|---|---|---|---|")
-    for kind, name, before, after in sample:
-        saved = round(100 * (1 - after / before), 1) if before else 0
-        lines.append(f"| {kind} | `{name}` | {before:,} | {after:,} | {saved}% |")
-    lines.append(f"| **total** |  | **{total_before:,}** | **{total_after:,}** | **{savings_pct}%** |")
-    lines.append("")
-
-    # Top offenders
-    def top(stats: list[OutputStats], n: int = 5) -> list[OutputStats]:
-        return sorted(stats, key=lambda s: s.bytes_out, reverse=True)[:n]
-
-    lines.append("### Biggest outputs")
-    lines.append("")
-    lines.append("| Kind | Name | Bytes | auto-titles | anyOf-null |")
-    lines.append("|---|---|---|---|---|")
-    for s in top(endpoint_stats) + top(schema_stats):
-        lines.append(f"| {s.kind} | `{s.name}` | {s.bytes_out:,} | "
-                     f"{s.titles_auto} | {s.anyof_null} |")
+    for s in sample:
+        saved = round(100 * (1 - s.bytes_compact / s.bytes_raw), 1) if s.bytes_raw else 0
+        lines.append(f"| {s.kind} | `{s.name}` | {s.bytes_raw:,} | "
+                     f"{s.bytes_compact:,} | {saved}% |")
+    lines.append(f"| **population total** |  | **{total_raw:,}** | **{total_compact:,}** | **{savings_pct}%** |")
     lines.append("")
 
     # Part C — static discoverability / description review
     lines.append("## Part C — Discoverability & description quality")
     lines.append("")
     lines.append(
-        "- `SKILL.md` (v0.3.0) description covers the primary triggers: "
+        "- `SKILL.md` (v0.4.0) description covers the primary triggers: "
         "_query the API spec, show available endpoints, get the schema for, "
         "search the API spec, look up operationId_, plus the catch-all "
         "_writing code that calls an API defined by an openapi.json file_. "
         "All 12 scenarios in Part A map cleanly onto this trigger surface."
     )
     lines.append(
-        "- Global flags (`--raw`, `--depth N`, `--spec PATH`) are documented "
-        "in `SKILL.md` with their position (before the subcommand) and the "
-        "expected trade-offs, so the agent picks them without trial-and-error."
+        "- `SKILL.md` now includes a **TOON primer** so a fresh Claude "
+        "session can parse the output format without an external spec fetch. "
+        "Global flags (`--raw`, `--depth N`, `--spec PATH`) are documented "
+        "with position and trade-offs."
     )
     lines.append(
-        "- `references/query-patterns.md` adds copy-pasteable recipes for "
-        "the common workflows and an \"output still too large\" fallback "
+        "- `references/query-patterns.md` gives copy-pasteable recipes for "
+        "the common workflows plus an \"output still too large\" fallback "
         "playbook (`--depth 1` → `summary --compact` → direct `schema` call)."
     )
     lines.append(
@@ -465,8 +441,8 @@ def render_report(scenarios: list[ScenarioResult],
     )
     lines.append(
         "- **Search is case-insensitive and multi-term AND.** "
-        "`search \"pii config\"` and `search \"PII CONFIG\"` both return the "
-        "same 11 results; terms are AND-joined across path + summary + "
+        "`search \"pii config\"` and `search \"PII CONFIG\"` return the "
+        "same set; terms are AND-joined across path + summary + "
         "description + operationId + tags + parameter names/descriptions."
     )
     lines.append(
@@ -479,11 +455,11 @@ def render_report(scenarios: list[ScenarioResult],
         "targeted unit test."
     )
     lines.append(
-        "- **Error messages are clean JSON, exit code 1** on all three error "
-        "paths (unknown schema, unknown path, missing spec file) — no "
-        "stack traces leak. Unknown schema and unknown operationId return "
-        "`did_you_mean` suggestions via `difflib.get_close_matches` instead "
-        "of dumping the full name list."
+        "- **Error messages are clean single-line JSON, exit code 1** on all "
+        "three error paths (unknown schema, unknown path, missing spec file) "
+        "— no stack traces leak. Unknown schema and unknown operationId "
+        "return `did_you_mean` suggestions via `difflib.get_close_matches` "
+        "instead of dumping the full name list."
     )
     lines.append(
         "- **Compact trimming preserves semantics.** `anyOf: [X, {type: "
@@ -493,39 +469,43 @@ def render_report(scenarios: list[ScenarioResult],
         "`HTTPValidationError` response entries elided. Pass `--raw` to "
         "disable when validating against the literal spec."
     )
+    lines.append(
+        "- **TOON encoder coverage.** Handles tabular arrays (homogeneous "
+        "primitive-valued objects, field list declared once), inline "
+        "primitive arrays, expanded list form for non-uniform or nested "
+        "item arrays, rule-based string quoting, and canonical numeric "
+        "forms. Inline-encoded in `openapi_tool.py` (~130 LOC); no external "
+        "dependencies."
+    )
     lines.append("")
 
-    # Shipped changes (v0.3.0)
-    lines.append("## Shipped in v0.3.0")
+    # Shipped changes (v0.4.0)
+    lines.append("## Shipped in v0.4.0")
     lines.append("")
     lines.append(
-        "This eval run measures the post-fix plugin. Compact savings above "
-        "(~42%) are the measured effect of the changes below."
+        "Structural output-format change atop the v0.3.0 compact trimmer."
     )
     lines.append("")
     lines.append(
-        "- **Compact output by default** — `compact()` post-processor in "
-        "`scripts/openapi_tool.py` collapses `anyOf[T, null]`, drops "
-        "auto-titles, empty `description`/`default`, and the 422 "
-        "`HTTPValidationError` boilerplate. `--raw` disables."
+        "- **TOON output format** — structured responses (`list`, "
+        "`endpoint`, `schema`, `search`, `operation`) now emit "
+        "[TOON](https://github.com/toon-format/spec) instead of indented "
+        "JSON. Uniform object arrays use tabular form (keys declared once "
+        "per array). Errors stay as single-line JSON."
     )
     lines.append(
-        "- **`--depth N` flag** — exposes the previously hardcoded ref-"
-        "resolution depth (default 3). `--depth 1` reduces a typical "
-        "`endpoint` call from ~12 KB to ~2 KB."
+        "- **Stdlib-only TOON encoder** — inline in `scripts/openapi_tool.py`. "
+        "No new dependencies, preserving the zero-dep policy."
     )
     lines.append(
-        "- **`summary --compact`** — paths-only view (~4 KB vs ~10 KB), "
-        "no per-op summaries, no schema-name list."
+        "- **Compact trimmer carried over** — the v0.3.0 `compact()` "
+        "post-processor still runs before TOON encoding. Total savings "
+        "compound: raw JSON → compact JSON → compact TOON."
     )
     lines.append(
-        "- **Typo suggestions** — `schema` and `operation` miss errors now "
-        "return at most 5 close matches via `difflib.get_close_matches` "
-        "instead of the full name list."
-    )
-    lines.append(
-        "- **Skill trigger updated** — `SKILL.md` description adds "
-        "\"look up operationId\" to the trigger phrases."
+        "- **Docs updated** — `SKILL.md` includes a TOON syntax primer; "
+        "`references/query-patterns.md` shows a TOON example; "
+        "`commands/openapi.md` references TOON rather than JSON."
     )
     lines.append("")
     lines.append("### Remaining follow-ups")
@@ -556,15 +536,12 @@ def main() -> None:
     print("→ Running UX scenarios…", file=sys.stderr)
     scenarios = run_scenarios()
 
-    print("→ Loading endpoint list…", file=sys.stderr)
-    _, list_out, _, _ = run(["list"])
-    listing = json.loads(list_out)
-
-    print(f"→ Measuring all {len(listing)} endpoints…", file=sys.stderr)
-    endpoint_stats = measure_all_endpoints(listing)
+    op_count = sum(1 for _ in tool._iter_operations(spec))
+    print(f"→ Measuring all {op_count} endpoints (raw + compact)…", file=sys.stderr)
+    endpoint_stats = measure_all_endpoints(spec)
 
     schema_count = len(spec.get("components", {}).get("schemas", {}))
-    print(f"→ Measuring all {schema_count} schemas…", file=sys.stderr)
+    print(f"→ Measuring all {schema_count} schemas (raw + compact)…", file=sys.stderr)
     schema_stats = measure_all_schemas(spec)
 
     _, summary_out, _, _ = run(["summary"])

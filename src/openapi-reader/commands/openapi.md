@@ -17,7 +17,7 @@ Global flags go **before** the subcommand:
 - `--raw` — disable the default junk-token trimming (keep Pydantic boilerplate intact)
 - `--depth N` — cap `$ref` resolution depth (default 3; try `--depth 1` for a shallow peek)
 
-Present the result clearly. For `summary`, display as-is. For JSON output (`list`, `endpoint`, `schema`, `search`, `operation`), format it for readability — highlight key fields rather than dumping raw JSON.
+Present the result clearly. For `summary`, display as-is. For TOON output (`list`, `endpoint`, `schema`, `search`, `operation`), format it for readability — highlight key fields rather than dumping the full tree. Errors are single-line JSON.
 
 If a schema / operationId miss returns `did_you_mean`, suggest the top match to the user rather than re-issuing the failing call.
 
