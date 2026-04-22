@@ -4,7 +4,7 @@ description: This skill should be used when the user asks to "query the API spec
   "show available endpoints", "what endpoints are available", "read the openapi",
   "get the schema for", "search the API spec", "look up operationId", or when writing
   code that calls an API defined by an openapi.json file in the project.
-version: 0.5.1
+version: 0.5.2
 ---
 
 # OpenAPI Skill

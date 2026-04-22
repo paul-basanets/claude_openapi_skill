@@ -1,5 +1,5 @@
 [project]
 name = "openapi-skill"
-version = "0.5.1"
-requires-python = ">=3.11"
+version = "0.5.2"
+requires-python = ">=3.9"
 dependencies = []

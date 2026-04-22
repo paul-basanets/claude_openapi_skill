@@ -7,6 +7,8 @@ below to preserve the zero-dep policy. Error payloads stay as single-line
 JSON for tiny-object parse simplicity.
 """
 
+from __future__ import annotations
+
 import argparse
 import difflib
 import hashlib
@@ -39,7 +41,7 @@ def _load_from_url(url: str, refresh: bool) -> dict:
             try:
                 with open(cache_file) as f:
                     return json.load(f)
-            except OSError, json.JSONDecodeError:
+            except (OSError, json.JSONDecodeError):
                 pass  # fall through to re-fetch
     try:
         with urllib.request.urlopen(url, timeout=URL_FETCH_TIMEOUT) as resp:
@@ -702,21 +704,20 @@ def main() -> None:
     args.refresh = pre_args.refresh
     spec = load_spec(args.spec, refresh=args.refresh)
 
-    match args.command:
-        case "summary":
-            cmd_summary(spec, compact_mode=args.compact)
-        case "list":
-            cmd_list(spec, tag=args.tag, method=args.method)
-        case "endpoint":
-            cmd_endpoint(
-                spec, args.method, args.path, raw=args.raw, max_depth=args.depth
-            )
-        case "schema":
-            cmd_schema(spec, args.name, raw=args.raw, max_depth=args.depth)
-        case "search":
-            cmd_search(spec, " ".join(args.query))
-        case "operation":
-            cmd_operation(spec, args.operation_id, raw=args.raw, max_depth=args.depth)
+    if args.command == "summary":
+        cmd_summary(spec, compact_mode=args.compact)
+    elif args.command == "list":
+        cmd_list(spec, tag=args.tag, method=args.method)
+    elif args.command == "endpoint":
+        cmd_endpoint(
+            spec, args.method, args.path, raw=args.raw, max_depth=args.depth
+        )
+    elif args.command == "schema":
+        cmd_schema(spec, args.name, raw=args.raw, max_depth=args.depth)
+    elif args.command == "search":
+        cmd_search(spec, " ".join(args.query))
+    elif args.command == "operation":
+        cmd_operation(spec, args.operation_id, raw=args.raw, max_depth=args.depth)
 
 
 if __name__ == "__main__":
