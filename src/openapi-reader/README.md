@@ -42,16 +42,6 @@ Then inside Claude Code:
 
 Use this mode when hacking on the plugin itself — `/plugin marketplace update basanets-plugins` refreshes against your local working tree.
 
-### Manual copy (legacy fallback)
-
-For Claude Code versions predating `/plugin`, download `dist/openapi-reader.zip` and unpack into your project:
-
-```bash
-unzip openapi-reader.zip
-cp -r openapi-reader/{.claude-plugin,skills,commands,scripts} .
-rm -rf openapi-reader/
-```
-
 ## Usage
 
 ### Slash command

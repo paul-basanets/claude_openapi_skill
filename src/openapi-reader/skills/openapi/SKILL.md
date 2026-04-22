@@ -9,7 +9,7 @@ version: 0.4.0
 
 # OpenAPI Skill
 
-Query OpenAPI specs without loading the full file into context. Use `uv run "${CLAUDE_PLUGIN_ROOT:-.}/scripts/openapi_tool.py"` via the Bash tool. (`${CLAUDE_PLUGIN_ROOT}` is set when the plugin is installed via a marketplace; the `:-.` fallback keeps the legacy manual-copy install working.)
+Query OpenAPI specs without loading the full file into context. Use `uv run "$CLAUDE_PLUGIN_ROOT/scripts/openapi_tool.py"` via the Bash tool.
 
 ## Subcommands
 
