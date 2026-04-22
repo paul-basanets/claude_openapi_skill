@@ -4,7 +4,7 @@ description: This skill should be used when the user asks to "query the API spec
   "show available endpoints", "what endpoints are available", "read the openapi",
   "get the schema for", "search the API spec", "look up operationId", or when writing
   code that calls an API defined by an openapi.json file in the project.
-version: 0.4.0
+version: 0.5.0
 ---
 
 # OpenAPI Skill
@@ -55,9 +55,10 @@ requestBody:
 
 ## Global flags
 
-Placed **before** the subcommand: `--spec PATH`, `--raw`, `--depth N`.
+Placed **before** the subcommand: `--spec PATH_OR_URL`, `--refresh`, `--raw`, `--depth N`.
 
-- `--spec PATH` — use a spec file other than `./openapi.json`.
+- `--spec PATH_OR_URL` — use a spec file or HTTP(S) URL instead of `./openapi.json`. URLs (starting with `http://` or `https://`) are fetched and cached for 1 hour in the system temp dir.
+- `--refresh` — force re-fetch of a URL spec, ignoring the cache.
 - `--raw` — disable compact trimming. By default the tool strips Pydantic boilerplate (auto-titles, `anyOf[T, null]` → `nullable: true`, empty `description`/`default`, generic 422 responses) with no semantic loss. Pass `--raw` when you need the literal spec text.
 - `--depth N` (default 3) — cap `$ref` resolution depth. `--depth 1` gives a shallow peek (very small); higher values fully inline deeply-nested schemas.
 
@@ -67,7 +68,7 @@ Placed **before** the subcommand: `--spec PATH`, `--raw`, `--depth N`.
 2. **Drill in** with `endpoint`, `schema`, or `operation`. Unknown names return `did_you_mean` suggestions — retry with one of those.
 3. **Never read `openapi.json` raw** into context.
 
-Default spec path is `openapi.json` in the current working directory.
+Default spec path is `openapi.json` in the current working directory. Pass `--spec https://…/openapi.json` to query a remote spec directly (cached 1h; use `--refresh` to re-fetch).
 
 ## Additional Resources
 

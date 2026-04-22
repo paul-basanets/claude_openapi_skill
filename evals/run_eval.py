@@ -46,45 +46,71 @@ def run(args: list[str], cwd: Path = ROOT) -> tuple[int, str, str, float]:
 
 # ---------- Part A: UX scenarios ----------
 
+
 @dataclass
 class Scenario:
     num: int
     ask: str
-    steps: list[list[str]]          # sequence of CLI arg lists
-    expect_ok: bool = True          # last step should exit 0
+    steps: list[list[str]]  # sequence of CLI arg lists
+    expect_ok: bool = True  # last step should exit 0
     expect_error_nonzero: bool = False  # for error-UX scenarios (must fail cleanly)
     notes: str = ""
 
 
 SCENARIOS: list[Scenario] = [
-    Scenario(1, "What does this API do?",
-             steps=[["summary"]]),
-    Scenario(2, "List all PII endpoints",
-             steps=[["search", "PII"]],
-             notes="also valid: list --tag 'PII Detection'"),
-    Scenario(3, "How do I add a new guardrail?",
-             steps=[["summary"], ["endpoint", "POST", "/api/guardrails/add"]]),
-    Scenario(4, "What's the shape of a GuardrailResponse?",
-             steps=[["schema", "GuardrailResponse"]]),
-    Scenario(5, "Look up operationId add_guardrail_api_guardrails_add_post",
-             steps=[["operation", "add_guardrail_api_guardrails_add_post"]]),
-    Scenario(6, "List every GET endpoint",
-             steps=[["list", "--method", "GET"]]),
-    Scenario(7, "Anything about embeddings?",
-             steps=[["search", "embedding"]]),
-    Scenario(8, "What endpoints exist under AI Test?",
-             steps=[["list", "--tag", "AI Test"]]),
-    Scenario(9, "What's the /api/advanced/analyze-patterns request body?",
-             steps=[["endpoint", "POST", "/api/advanced/analyze-patterns"]]),
-    Scenario(10, "Unknown schema name (error UX)",
-              steps=[["schema", "NotARealSchema"]],
-              expect_ok=False, expect_error_nonzero=True),
-    Scenario(11, "Unknown path (error UX)",
-              steps=[["endpoint", "GET", "/does/not/exist"]],
-              expect_ok=False, expect_error_nonzero=True),
-    Scenario(12, "Missing spec file (error UX)",
-              steps=[["--spec", "nope.json", "summary"]],
-              expect_ok=False, expect_error_nonzero=True),
+    Scenario(1, "What does this API do?", steps=[["summary"]]),
+    Scenario(
+        2,
+        "List all PII endpoints",
+        steps=[["search", "PII"]],
+        notes="also valid: list --tag 'PII Detection'",
+    ),
+    Scenario(
+        3,
+        "How do I add a new guardrail?",
+        steps=[["summary"], ["endpoint", "POST", "/api/guardrails/add"]],
+    ),
+    Scenario(
+        4,
+        "What's the shape of a GuardrailResponse?",
+        steps=[["schema", "GuardrailResponse"]],
+    ),
+    Scenario(
+        5,
+        "Look up operationId add_guardrail_api_guardrails_add_post",
+        steps=[["operation", "add_guardrail_api_guardrails_add_post"]],
+    ),
+    Scenario(6, "List every GET endpoint", steps=[["list", "--method", "GET"]]),
+    Scenario(7, "Anything about embeddings?", steps=[["search", "embedding"]]),
+    Scenario(
+        8, "What endpoints exist under AI Test?", steps=[["list", "--tag", "AI Test"]]
+    ),
+    Scenario(
+        9,
+        "What's the /api/advanced/analyze-patterns request body?",
+        steps=[["endpoint", "POST", "/api/advanced/analyze-patterns"]],
+    ),
+    Scenario(
+        10,
+        "Unknown schema name (error UX)",
+        steps=[["schema", "NotARealSchema"]],
+        expect_ok=False,
+        expect_error_nonzero=True,
+    ),
+    Scenario(
+        11,
+        "Unknown path (error UX)",
+        steps=[["endpoint", "GET", "/does/not/exist"]],
+        expect_ok=False,
+        expect_error_nonzero=True,
+    ),
+    Scenario(
+        12,
+        "Missing spec file (error UX)",
+        steps=[["--spec", "nope.json", "summary"]],
+        expect_ok=False,
+        expect_error_nonzero=True,
+    ),
 ]
 
 
@@ -134,10 +160,10 @@ def run_scenarios() -> list[ScenarioResult]:
 
 @dataclass
 class OutputStats:
-    kind: str               # 'endpoint' | 'schema'
+    kind: str  # 'endpoint' | 'schema'
     name: str
-    bytes_raw: int          # --raw TOON bytes
-    bytes_compact: int      # default (compact) TOON bytes
+    bytes_raw: int  # --raw TOON bytes
+    bytes_compact: int  # default (compact) TOON bytes
     titles_total: int
     titles_auto: int
     anyof_null: int
@@ -216,13 +242,15 @@ def measure_all_endpoints(spec: dict) -> list[OutputStats]:
             continue
         raw_obj = tool._build_endpoint(spec, method, path, max_depth=tool.DEFAULT_DEPTH)
         junk = analyze_junk(raw_obj)
-        stats.append(OutputStats(
-            kind="endpoint",
-            name=f"{method.upper()} {path}",
-            bytes_raw=len(out_r),
-            bytes_compact=len(out_c),
-            **junk,
-        ))
+        stats.append(
+            OutputStats(
+                kind="endpoint",
+                name=f"{method.upper()} {path}",
+                bytes_raw=len(out_r),
+                bytes_compact=len(out_c),
+                **junk,
+            )
+        )
     return stats
 
 
@@ -240,13 +268,15 @@ def measure_all_schemas(spec: dict) -> list[OutputStats]:
             spec["components"]["schemas"][name], spec, max_depth=tool.DEFAULT_DEPTH
         )
         junk = analyze_junk(raw_obj, parent_key=name)
-        stats.append(OutputStats(
-            kind="schema",
-            name=name,
-            bytes_raw=len(out_r),
-            bytes_compact=len(out_c),
-            **junk,
-        ))
+        stats.append(
+            OutputStats(
+                kind="schema",
+                name=name,
+                bytes_raw=len(out_r),
+                bytes_compact=len(out_c),
+                **junk,
+            )
+        )
     return stats
 
 
@@ -260,11 +290,14 @@ def pctile(values: list[int], p: float) -> int:
 
 # ---------- Report rendering ----------
 
-def render_report(scenarios: list[ScenarioResult],
-                  endpoint_stats: list[OutputStats],
-                  schema_stats: list[OutputStats],
-                  spec_bytes: int,
-                  summary_bytes: int) -> str:
+
+def render_report(
+    scenarios: list[ScenarioResult],
+    endpoint_stats: list[OutputStats],
+    schema_stats: list[OutputStats],
+    spec_bytes: int,
+    summary_bytes: int,
+) -> str:
     passed = sum(1 for r in scenarios if r.passed)
     ep_raw = [s.bytes_raw for s in endpoint_stats]
     sc_raw = [s.bytes_raw for s in schema_stats]
@@ -278,25 +311,35 @@ def render_report(scenarios: list[ScenarioResult],
     lines: list[str] = []
     lines.append("# `openapi-reader` Plugin Evaluation")
     lines.append("")
-    lines.append(f"_Auto-generated by `evals/run_eval.py`. Fixture: `openapi.json` "
-                 f"({spec_bytes:,} bytes). Output format: **TOON**._")
+    lines.append(
+        f"_Auto-generated by `evals/run_eval.py`. Fixture: `openapi.json` "
+        f"({spec_bytes:,} bytes). Output format: **TOON**._"
+    )
     lines.append("")
 
     # TL;DR
     lines.append("## TL;DR")
     lines.append("")
-    lines.append(f"- **Effectiveness**: {passed}/{len(scenarios)} UX scenarios "
-                 f"{'pass' if passed == len(scenarios) else 'pass (see table)'}.")
-    lines.append(f"- **Compression vs raw spec**: `summary` is "
-                 f"{spec_bytes // summary_bytes}× smaller than the raw spec "
-                 f"({summary_bytes:,} vs {spec_bytes:,} bytes).")
-    lines.append(f"- **Compact-mode savings (default on)**: compact output is "
-                 f"**~{savings_pct}% smaller** than `--raw` "
-                 f"(measured end-to-end across all "
-                 f"{len(endpoint_stats)} endpoints and {len(schema_stats)} schemas).")
-    lines.append("- **Output format**: TOON (Token-Oriented Object Notation) "
-                 "for structured responses; plain text for `summary`; "
-                 "single-line JSON for errors.")
+    lines.append(
+        f"- **Effectiveness**: {passed}/{len(scenarios)} UX scenarios "
+        f"{'pass' if passed == len(scenarios) else 'pass (see table)'}."
+    )
+    lines.append(
+        f"- **Compression vs raw spec**: `summary` is "
+        f"{spec_bytes // summary_bytes}× smaller than the raw spec "
+        f"({summary_bytes:,} vs {spec_bytes:,} bytes)."
+    )
+    lines.append(
+        f"- **Compact-mode savings (default on)**: compact output is "
+        f"**~{savings_pct}% smaller** than `--raw` "
+        f"(measured end-to-end across all "
+        f"{len(endpoint_stats)} endpoints and {len(schema_stats)} schemas)."
+    )
+    lines.append(
+        "- **Output format**: TOON (Token-Oriented Object Notation) "
+        "for structured responses; plain text for `summary`; "
+        "single-line JSON for errors."
+    )
     lines.append("")
 
     # Part A
@@ -308,8 +351,10 @@ def render_report(scenarios: list[ScenarioResult],
         sc = r.scenario
         step_str = " → ".join(" ".join(s) for s in sc.steps)
         verdict = "PASS" if r.passed else "FAIL"
-        lines.append(f"| {sc.num} | {sc.ask} | `{step_str}` | "
-                     f"{r.total_bytes:,} | {r.total_time_s:.2f}s | {verdict} |")
+        lines.append(
+            f"| {sc.num} | {sc.ask} | `{step_str}` | "
+            f"{r.total_bytes:,} | {r.total_time_s:.2f}s | {verdict} |"
+        )
     lines.append("")
 
     # Error-UX transcripts
@@ -318,8 +363,9 @@ def render_report(scenarios: list[ScenarioResult],
     for r in scenarios:
         if not r.scenario.expect_error_nonzero:
             continue
-        lines.append(f"**#{r.scenario.num} — {r.scenario.ask}**  "
-                     f"(exit={r.exit_codes[-1]})")
+        lines.append(
+            f"**#{r.scenario.num} — {r.scenario.ask}**  (exit={r.exit_codes[-1]})"
+        )
         lines.append("```")
         lines.append((r.stdout_tail or r.stderr_tail).strip())
         lines.append("```")
@@ -328,30 +374,40 @@ def render_report(scenarios: list[ScenarioResult],
     # Part B
     lines.append("## Part B — Output size & junk-token analysis")
     lines.append("")
-    lines.append(f"Population: {len(endpoint_stats)} endpoints, "
-                 f"{len(schema_stats)} schemas (all covered).")
+    lines.append(
+        f"Population: {len(endpoint_stats)} endpoints, "
+        f"{len(schema_stats)} schemas (all covered)."
+    )
     lines.append("")
     lines.append("### Size distribution (bytes, `--raw` TOON)")
     lines.append("")
     lines.append("| Command | min | p50 | p90 | max | total |")
     lines.append("|---------|-----|-----|-----|-----|-------|")
     if ep_raw:
-        lines.append(f"| `endpoint` | {min(ep_raw):,} | {int(median(ep_raw)):,} | "
-                     f"{pctile(ep_raw, 90):,} | {max(ep_raw):,} | {sum(ep_raw):,} |")
+        lines.append(
+            f"| `endpoint` | {min(ep_raw):,} | {int(median(ep_raw)):,} | "
+            f"{pctile(ep_raw, 90):,} | {max(ep_raw):,} | {sum(ep_raw):,} |"
+        )
     if sc_raw:
-        lines.append(f"| `schema` | {min(sc_raw):,} | {int(median(sc_raw)):,} | "
-                     f"{pctile(sc_raw, 90):,} | {max(sc_raw):,} | {sum(sc_raw):,} |")
+        lines.append(
+            f"| `schema` | {min(sc_raw):,} | {int(median(sc_raw)):,} | "
+            f"{pctile(sc_raw, 90):,} | {max(sc_raw):,} | {sum(sc_raw):,} |"
+        )
     lines.append("")
     lines.append("### Size distribution (bytes, default compact TOON)")
     lines.append("")
     lines.append("| Command | min | p50 | p90 | max | total |")
     lines.append("|---------|-----|-----|-----|-----|-------|")
     if ep_com:
-        lines.append(f"| `endpoint` | {min(ep_com):,} | {int(median(ep_com)):,} | "
-                     f"{pctile(ep_com, 90):,} | {max(ep_com):,} | {sum(ep_com):,} |")
+        lines.append(
+            f"| `endpoint` | {min(ep_com):,} | {int(median(ep_com)):,} | "
+            f"{pctile(ep_com, 90):,} | {max(ep_com):,} | {sum(ep_com):,} |"
+        )
     if sc_com:
-        lines.append(f"| `schema` | {min(sc_com):,} | {int(median(sc_com)):,} | "
-                     f"{pctile(sc_com, 90):,} | {max(sc_com):,} | {sum(sc_com):,} |")
+        lines.append(
+            f"| `schema` | {min(sc_com):,} | {int(median(sc_com)):,} | "
+            f"{pctile(sc_com, 90):,} | {max(sc_com):,} | {sum(sc_com):,} |"
+        )
     lines.append("")
 
     # Junk totals (measured on pre-emission Python structures)
@@ -368,37 +424,59 @@ def render_report(scenarios: list[ScenarioResult],
     ep_t, sc_t = totals(endpoint_stats), totals(schema_stats)
     lines.append("### Junk-category totals (what the compact trimmer strips)")
     lines.append("")
-    lines.append("Measured on the in-memory spec structures before emission — "
-                 "format-independent.")
+    lines.append(
+        "Measured on the in-memory spec structures before emission — "
+        "format-independent."
+    )
     lines.append("")
     lines.append("| Category | `endpoint` total | `schema` total | Notes |")
     lines.append("|---|---|---|---|")
-    lines.append(f"| `title` fields (all) | {ep_t['titles_total']:,} | {sc_t['titles_total']:,} "
-                 f"| Count of `title` keys on dict nodes. |")
-    lines.append(f"| `title` auto-derived | {ep_t['titles_auto']:,} | {sc_t['titles_auto']:,} "
-                 f"| Matches parent key (Pydantic artifact). Stripping is safe. |")
-    lines.append(f"| `anyOf[T, null]` nullable | {ep_t['anyof_null']:,} | {sc_t['anyof_null']:,} "
-                 f"| Each can collapse to a `nullable` marker. |")
-    lines.append(f"| empty `description: \"\"` | {ep_t['empty_desc']:,} | {sc_t['empty_desc']:,} "
-                 f"| No signal; safely droppable. |")
-    lines.append(f"| empty `default: \"\"` | {ep_t['empty_default_str']:,} | {sc_t['empty_default_str']:,} "
-                 f"| Usually placeholder noise. |")
-    lines.append(f"| `HTTPValidationError` refs | {ep_t['httpvalidation']:,} | {sc_t['httpvalidation']:,} "
-                 f"| Standard FastAPI 422 boilerplate, near-identical on every call. |")
+    lines.append(
+        f"| `title` fields (all) | {ep_t['titles_total']:,} | {sc_t['titles_total']:,} "
+        f"| Count of `title` keys on dict nodes. |"
+    )
+    lines.append(
+        f"| `title` auto-derived | {ep_t['titles_auto']:,} | {sc_t['titles_auto']:,} "
+        f"| Matches parent key (Pydantic artifact). Stripping is safe. |"
+    )
+    lines.append(
+        f"| `anyOf[T, null]` nullable | {ep_t['anyof_null']:,} | {sc_t['anyof_null']:,} "
+        f"| Each can collapse to a `nullable` marker. |"
+    )
+    lines.append(
+        f'| empty `description: ""` | {ep_t["empty_desc"]:,} | {sc_t["empty_desc"]:,} '
+        f"| No signal; safely droppable. |"
+    )
+    lines.append(
+        f'| empty `default: ""` | {ep_t["empty_default_str"]:,} | {sc_t["empty_default_str"]:,} '
+        f"| Usually placeholder noise. |"
+    )
+    lines.append(
+        f"| `HTTPValidationError` refs | {ep_t['httpvalidation']:,} | {sc_t['httpvalidation']:,} "
+        f"| Standard FastAPI 422 boilerplate, near-identical on every call. |"
+    )
     lines.append("")
 
     # Savings sample
     lines.append("### Compact vs `--raw` — top-10 sample")
     lines.append("")
-    sample = sorted(endpoint_stats, key=lambda s: s.bytes_raw, reverse=True)[:5] + \
-             sorted(schema_stats, key=lambda s: s.bytes_raw, reverse=True)[:5]
+    sample = (
+        sorted(endpoint_stats, key=lambda s: s.bytes_raw, reverse=True)[:5]
+        + sorted(schema_stats, key=lambda s: s.bytes_raw, reverse=True)[:5]
+    )
     lines.append("| Kind | Name | Raw (B) | Compact (B) | Saved |")
     lines.append("|---|---|---|---|---|")
     for s in sample:
-        saved = round(100 * (1 - s.bytes_compact / s.bytes_raw), 1) if s.bytes_raw else 0
-        lines.append(f"| {s.kind} | `{s.name}` | {s.bytes_raw:,} | "
-                     f"{s.bytes_compact:,} | {saved}% |")
-    lines.append(f"| **population total** |  | **{total_raw:,}** | **{total_compact:,}** | **{savings_pct}%** |")
+        saved = (
+            round(100 * (1 - s.bytes_compact / s.bytes_raw), 1) if s.bytes_raw else 0
+        )
+        lines.append(
+            f"| {s.kind} | `{s.name}` | {s.bytes_raw:,} | "
+            f"{s.bytes_compact:,} | {saved}% |"
+        )
+    lines.append(
+        f"| **population total** |  | **{total_raw:,}** | **{total_compact:,}** | **{savings_pct}%** |"
+    )
     lines.append("")
 
     # Part C — static discoverability / description review
@@ -419,7 +497,7 @@ def render_report(scenarios: list[ScenarioResult],
     )
     lines.append(
         "- `references/query-patterns.md` gives copy-pasteable recipes for "
-        "the common workflows plus an \"output still too large\" fallback "
+        'the common workflows plus an "output still too large" fallback '
         "playbook (`--depth 1` → `summary --compact` → direct `schema` call)."
     )
     lines.append(
@@ -441,7 +519,7 @@ def render_report(scenarios: list[ScenarioResult],
     )
     lines.append(
         "- **Search is case-insensitive and multi-term AND.** "
-        "`search \"pii config\"` and `search \"PII CONFIG\"` return the "
+        '`search "pii config"` and `search "PII CONFIG"` return the '
         "same set; terms are AND-joined across path + summary + "
         "description + operationId + tags + parameter names/descriptions."
     )
@@ -465,7 +543,7 @@ def render_report(scenarios: list[ScenarioResult],
         "- **Compact trimming preserves semantics.** `anyOf: [X, {type: "
         "null}]` collapses to `X + nullable: true`; auto-derived `title` "
         "fields (matching `key.title()`) are dropped; empty `description: "
-        "\"\"` / `default: \"\"` removed; FastAPI 422 "
+        '""` / `default: ""` removed; FastAPI 422 '
         "`HTTPValidationError` response entries elided. Pass `--raw` to "
         "disable when validating against the literal spec."
     )
@@ -482,9 +560,7 @@ def render_report(scenarios: list[ScenarioResult],
     # Shipped changes (v0.4.0)
     lines.append("## Shipped in v0.4.0")
     lines.append("")
-    lines.append(
-        "Structural output-format change atop the v0.3.0 compact trimmer."
-    )
+    lines.append("Structural output-format change atop the v0.3.0 compact trimmer.")
     lines.append("")
     lines.append(
         "- **TOON output format** — structured responses (`list`, "
@@ -525,6 +601,7 @@ def render_report(scenarios: list[ScenarioResult],
 
 # ---------- Main ----------
 
+
 def main() -> None:
     if not SPEC.exists():
         print(f"Missing fixture: {SPEC}", file=sys.stderr)
@@ -548,12 +625,15 @@ def main() -> None:
     summary_bytes = len(summary_out)
 
     print("→ Rendering report…", file=sys.stderr)
-    report = render_report(scenarios, endpoint_stats, schema_stats,
-                           spec_bytes, summary_bytes)
+    report = render_report(
+        scenarios, endpoint_stats, schema_stats, spec_bytes, summary_bytes
+    )
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(report)
-    print(f"✓ Wrote {REPORT.relative_to(ROOT)} "
-          f"({REPORT.stat().st_size:,} bytes)", file=sys.stderr)
+    print(
+        f"✓ Wrote {REPORT.relative_to(ROOT)} ({REPORT.stat().st_size:,} bytes)",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":

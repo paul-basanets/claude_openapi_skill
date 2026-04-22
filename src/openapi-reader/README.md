@@ -24,7 +24,7 @@ Inside Claude Code:
 
 Claude Code clones the repo into its plugin cache automatically — no manual `git clone` needed. To pin a version, append `@<tag>` to the marketplace source (e.g. `paul-basanets/claude_openapi_skill@v0.4.0`).
 
-Your spec must be named `openapi.json` in the project root, or pass `--spec PATH` explicitly. The plugin activates on API-related prompts; use `/openapi` directly for explicit queries.
+Your spec must be named `openapi.json` in the project root, or pass `--spec PATH_OR_URL` explicitly — a local path or an HTTP(S) URL (e.g. `--spec https://api.example.com/openapi.json`). URL specs are cached 1h in the system temp dir; add `--refresh` to force re-fetch. The plugin activates on API-related prompts; use `/openapi` directly for explicit queries.
 
 ### Local-directory marketplace (contributors / offline)
 
@@ -66,6 +66,8 @@ uv run scripts/openapi_tool.py schema NAME
 uv run scripts/openapi_tool.py search QUERY
 uv run scripts/openapi_tool.py operation OPERATION_ID
 uv run scripts/openapi_tool.py --spec path/to/spec.json summary
+uv run scripts/openapi_tool.py --spec https://api.example.com/openapi.json summary   # remote spec (cached 1h)
+uv run scripts/openapi_tool.py --spec https://api.example.com/openapi.json --refresh summary   # force re-fetch
 uv run scripts/openapi_tool.py --depth 1 endpoint METHOD PATH    # shallow $ref resolution
 uv run scripts/openapi_tool.py --raw endpoint METHOD PATH        # disable junk trimming
 ```

@@ -1,6 +1,6 @@
 # OpenAPI Query Patterns
 
-All examples assume `openapi.json` in the current directory. Add `--spec PATH` before the subcommand if it lives elsewhere.
+All examples assume `openapi.json` in the current directory. Add `--spec PATH_OR_URL` before the subcommand if the spec lives elsewhere — a local path or an HTTP(S) URL (e.g. `--spec https://petstore3.swagger.io/api/v3/openapi.json`). URL specs are cached 1h in the system temp dir; pass `--refresh` to force re-fetch.
 
 ## 1. Discover the API surface
 
