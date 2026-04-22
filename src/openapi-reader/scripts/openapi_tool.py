@@ -680,7 +680,7 @@ def main() -> None:
 
     ep = sub.add_parser("endpoint", help="Full operation detail with resolved schemas")
     ep.add_argument("method", help="HTTP method, e.g. POST")
-    ep.add_argument("path", help="API path, e.g. /api/guardrails/add")
+    ep.add_argument("path", help="API path, e.g. /api/resource/add")
 
     sc = sub.add_parser("schema", help="Schema definition with resolved $refs")
     sc.add_argument("name", help="Schema name, e.g. GuardrailResponse")
@@ -692,7 +692,7 @@ def main() -> None:
         "operation", help="Full operation detail looked up by operationId"
     )
     op_p.add_argument(
-        "operation_id", help="operationId, e.g. add_guardrail_api_guardrails_add_post"
+        "operation_id", help="operationId, e.g. add_guardrail_api_resource_add_post"
     )
 
     args = parser.parse_args(remaining)

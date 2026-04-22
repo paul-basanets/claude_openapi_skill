@@ -29,7 +29,7 @@ Inside Claude Code:
 /reload-plugins
 ```
 
-Claude Code clones the repo into its plugin cache automatically — no manual `git clone` needed. To pin a version, append `@<tag>` to the marketplace source (e.g. `paul-basanets/claude_openapi_skill@v0.5.0`).
+Claude Code clones the repo into its plugin cache automatically — no manual `git clone` needed. To pin a version, append `@<tag>` to the marketplace source (e.g. `paul-basanets/claude_openapi_skill@v0.5.1`).
 
 Your spec must be named `openapi.json` in the project root, or pass `--spec PATH_OR_URL` explicitly — a local path or an HTTP(S) URL (e.g. `--spec https://api.example.com/openapi.json`). URL specs are cached 1h in the system temp dir; add `--refresh` to force re-fetch. The plugin activates on API-related prompts; use `/openapi` directly for explicit queries.
 
@@ -56,10 +56,10 @@ Use this mode when hacking on the plugin itself — `/plugin marketplace update 
 ```
 /openapi summary
 /openapi list --tag "PII Detection"
-/openapi endpoint POST /api/guardrails/add
-/openapi schema GuardrailResponse
+/openapi endpoint POST /api/resource/add
+/openapi schema EndpointResponse
 /openapi search "embedding"
-/openapi operation add_guardrail_api_guardrails_add_post
+/openapi operation add_guardrail_api_resource_add_post
 ```
 
 ### Direct CLI
@@ -111,5 +111,5 @@ items[2]:
 
 ## Requirements
 
-- Python 3.14+ (no external dependencies)
+- Python 3.11+ (no external dependencies)
 - `uv` on PATH

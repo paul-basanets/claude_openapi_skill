@@ -22,15 +22,15 @@ uv run scripts/openapi_tool.py list --method GET
 ## 3. Understand a specific endpoint
 
 ```bash
-uv run scripts/openapi_tool.py endpoint POST /api/guardrails/add
-uv run scripts/openapi_tool.py --depth 1 endpoint POST /api/guardrails/add   # shallow peek
-uv run scripts/openapi_tool.py --raw endpoint POST /api/guardrails/add       # untrimmed
+uv run scripts/openapi_tool.py endpoint POST /api/resource/add
+uv run scripts/openapi_tool.py --depth 1 endpoint POST /api/resource/add   # shallow peek
+uv run scripts/openapi_tool.py --raw endpoint POST /api/resource/add       # untrimmed
 ```
 
 Returns parameters, request body, and responses with `$ref`s resolved inline, encoded as TOON. The default output drops Pydantic auto-titles, collapses `anyOf: [T, {type: null}]` into `nullable: true`, strips empty `description`/`default` fields, and removes the generic 422 `HTTPValidationError` branch. TOON encoding additionally saves ~20–35% tokens vs the equivalent JSON. Output shape:
 
 ```
-path: /api/guardrails/add
+path: /api/resource/add
 method: POST
 parameters[0]:
 requestBody:
@@ -60,7 +60,7 @@ If the name is wrong, the error includes `did_you_mean` — retry with one of th
 When code references an `operationId` and you don't know the path:
 
 ```bash
-uv run scripts/openapi_tool.py operation add_guardrail_api_guardrails_add_post
+uv run scripts/openapi_tool.py operation add_guardrail_api_resource_add_post
 uv run scripts/openapi_tool.py operation getGuardrail
 ```
 

@@ -23,12 +23,11 @@ See [`src/openapi-reader/README.md#installation`](src/openapi-reader/README.md#i
 ```
 .claude-plugin/         marketplace catalog (basanets-plugins)
 src/openapi-reader/     plugin source (see its README for usage)
-├── .claude-plugin/     plugin manifest (v0.5.0)
+├── .claude-plugin/     plugin manifest (v0.5.1)
 ├── commands/           /openapi slash command
 ├── scripts/            openapi_tool.py — zero-dep Python CLI + TOON encoder
 └── skills/openapi/     skill guidance + query-patterns reference
 
-openapi.json            test fixture (Guardrail Management API v2.15.3)
 evals/run_eval.py       evaluation harness (12 UX scenarios + population-wide metrics)
 docs/EVAL.md            generated evaluation report
 bundle.py               builds dist/openapi-reader.zip
@@ -42,7 +41,7 @@ python -m venv .venv && source .venv/bin/activate
 
 # Test the CLI against the fixture
 uv run src/openapi-reader/scripts/openapi_tool.py summary
-uv run src/openapi-reader/scripts/openapi_tool.py endpoint POST /api/guardrails/add
+uv run src/openapi-reader/scripts/openapi_tool.py endpoint POST /api/resource/add
 uv run src/openapi-reader/scripts/openapi_tool.py schema GuardrailResponse
 ```
 

@@ -9,7 +9,7 @@ This project is building a Claude skill for efficiently reading and querying Ope
 ## Project Setup
 
 ```bash
-# Python 3.14+ required
+# Python 3.11+ required
 python -m venv .venv
 source .venv/bin/activate
 ```
@@ -19,8 +19,8 @@ No dependencies are currently declared. The `pyproject.toml` is minimal:
 ```toml
 [project]
 name = "openapi-skill"
-version = "0.1.0"
-requires-python = ">=3.14"
+version = "0.5.1"
+requires-python = ">=3.11"
 dependencies = []
 ```
 

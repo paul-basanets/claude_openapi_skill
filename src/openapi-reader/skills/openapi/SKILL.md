@@ -4,7 +4,7 @@ description: This skill should be used when the user asks to "query the API spec
   "show available endpoints", "what endpoints are available", "read the openapi",
   "get the schema for", "search the API spec", "look up operationId", or when writing
   code that calls an API defined by an openapi.json file in the project.
-version: 0.5.0
+version: 0.5.1
 ---
 
 # OpenAPI Skill
@@ -38,7 +38,7 @@ TOON ([Token-Oriented Object Notation](https://github.com/toon-format/spec/blob/
 A full endpoint looks like:
 
 ```
-path: /api/guardrails/add
+path: /api/resource/add
 method: POST
 requestBody:
   required: true
