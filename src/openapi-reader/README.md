@@ -59,7 +59,7 @@ Use this mode when hacking on the plugin itself — `/plugin marketplace update 
 /openapi endpoint POST /api/resource/add
 /openapi schema EndpointResponse
 /openapi search "embedding"
-/openapi operation add_guardrail_api_resource_add_post
+/openapi operation add_resource_api_resource_add_post
 ```
 
 ### Direct CLI

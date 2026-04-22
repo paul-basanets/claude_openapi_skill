@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Purpose
 
-This project is building a Claude skill for efficiently reading and querying OpenAPI specifications. The central artifact is `openapi.json` — a real-world OpenAPI 3.1.0 spec for a Guardrail Management Backend API (v2.15.3) that serves as the primary test fixture.
+This project is building a Claude skill for efficiently reading and querying OpenAPI specifications.
 
 ## Project Setup
 

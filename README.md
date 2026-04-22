@@ -42,7 +42,7 @@ python -m venv .venv && source .venv/bin/activate
 # Test the CLI against the fixture
 uv run src/openapi-reader/scripts/openapi_tool.py summary
 uv run src/openapi-reader/scripts/openapi_tool.py endpoint POST /api/resource/add
-uv run src/openapi-reader/scripts/openapi_tool.py schema GuardrailResponse
+uv run src/openapi-reader/scripts/openapi_tool.py schema ResourceResponse
 ```
 
 ## Evaluation

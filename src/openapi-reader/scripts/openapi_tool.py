@@ -683,7 +683,7 @@ def main() -> None:
     ep.add_argument("path", help="API path, e.g. /api/resource/add")
 
     sc = sub.add_parser("schema", help="Schema definition with resolved $refs")
-    sc.add_argument("name", help="Schema name, e.g. GuardrailResponse")
+    sc.add_argument("name", help="Schema name, e.g. ResourceResponse")
 
     sr = sub.add_parser("search", help="Full-text search across endpoints and schemas")
     sr.add_argument("query", nargs="+", help="Search terms")
@@ -692,7 +692,7 @@ def main() -> None:
         "operation", help="Full operation detail looked up by operationId"
     )
     op_p.add_argument(
-        "operation_id", help="operationId, e.g. add_guardrail_api_resource_add_post"
+        "operation_id", help="operationId, e.g. add_resource_api_resource_add_post"
     )
 
     args = parser.parse_args(remaining)

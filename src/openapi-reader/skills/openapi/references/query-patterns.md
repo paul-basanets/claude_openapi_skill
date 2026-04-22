@@ -49,8 +49,8 @@ responses:
 ## 4. Understand a request or response schema
 
 ```bash
-uv run scripts/openapi_tool.py schema GuardrailResponse
-uv run scripts/openapi_tool.py schema AddGuardrailRequest
+uv run scripts/openapi_tool.py schema ResourceResponse
+uv run scripts/openapi_tool.py schema AddResourceRequest
 ```
 
 If the name is wrong, the error includes `did_you_mean` — retry with one of those.
@@ -60,8 +60,8 @@ If the name is wrong, the error includes `did_you_mean` — retry with one of th
 When code references an `operationId` and you don't know the path:
 
 ```bash
-uv run scripts/openapi_tool.py operation add_guardrail_api_resource_add_post
-uv run scripts/openapi_tool.py operation getGuardrail
+uv run scripts/openapi_tool.py operation add_resource_api_resource_add_post
+uv run scripts/openapi_tool.py operation getResource
 ```
 
 Returns the same full output as `endpoint`. Misses return `did_you_mean` suggestions.
