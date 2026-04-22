@@ -4,9 +4,22 @@ Development project for the **openapi-reader** Claude Code plugin — token-effi
 
 Structured output is emitted as [TOON](https://github.com/toon-format/spec) (Token-Oriented Object Notation). Combined with the built-in junk-token trimmer, the plugin delivers **~58% fewer bytes than raw JSON** on the shipped fixture without semantic loss. See `src/openapi-reader/README.md` for format details and `docs/EVAL.md` for the current measurement report.
 
+## Install
+
+Inside Claude Code:
+
+```
+/plugin marketplace add paul-basanets/claude_openapi_skill
+/plugin install openapi-reader@basanets-plugins
+/reload-plugins
+```
+
+See [`src/openapi-reader/README.md#installation`](src/openapi-reader/README.md#installation) for local-directory and manual-copy install modes.
+
 ## Structure
 
 ```
+.claude-plugin/         marketplace catalog (basanets-plugins)
 src/openapi-reader/     plugin source (see its README for usage)
 ├── .claude-plugin/     plugin manifest (v0.4.0)
 ├── commands/           /openapi slash command

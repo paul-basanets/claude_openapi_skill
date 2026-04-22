@@ -8,8 +8,10 @@ allowed-tools:
 Parse the subcommand and arguments from the `/openapi` invocation, then run:
 
 ```
-uv run scripts/openapi_tool.py [--spec PATH] [--raw] [--depth N] <subcommand> [args]
+uv run "${CLAUDE_PLUGIN_ROOT:-.}/scripts/openapi_tool.py" [--spec PATH] [--raw] [--depth N] <subcommand> [args]
 ```
+
+`${CLAUDE_PLUGIN_ROOT}` is set by Claude Code when the plugin is installed via a marketplace; the `:-.` fallback keeps the legacy manual-copy install (script at project root) working.
 
 Global flags go **before** the subcommand:
 
@@ -21,4 +23,4 @@ Present the result clearly. For `summary`, display as-is. For TOON output (`list
 
 If a schema / operationId miss returns `did_you_mean`, suggest the top match to the user rather than re-issuing the failing call.
 
-If `openapi.json` is not found, suggest running with `--spec PATH` before the subcommand, e.g. `uv run scripts/openapi_tool.py --spec path/to/spec.json summary`.
+If `openapi.json` is not found, suggest running with `--spec PATH` before the subcommand, e.g. `uv run "${CLAUDE_PLUGIN_ROOT:-.}/scripts/openapi_tool.py" --spec path/to/spec.json summary`.

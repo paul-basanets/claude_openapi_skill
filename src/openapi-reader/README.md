@@ -12,15 +12,45 @@ Errors are single-line JSON; `summary` is plain text. See `docs/EVAL.md` in the 
 
 ## Installation
 
-Copy the plugin files into your project root:
+### From GitHub (recommended)
+
+Inside Claude Code:
+
+```
+/plugin marketplace add paul-basanets/claude_openapi_skill
+/plugin install openapi-reader@basanets-plugins
+/reload-plugins
+```
+
+Claude Code clones the repo into its plugin cache automatically — no manual `git clone` needed. To pin a version, append `@<tag>` to the marketplace source (e.g. `paul-basanets/claude_openapi_skill@v0.4.0`).
+
+Your spec must be named `openapi.json` in the project root, or pass `--spec PATH` explicitly. The plugin activates on API-related prompts; use `/openapi` directly for explicit queries.
+
+### Local-directory marketplace (contributors / offline)
+
+```bash
+git clone https://github.com/paul-basanets/claude_openapi_skill.git
+```
+
+Then inside Claude Code:
+
+```
+/plugin marketplace add /absolute/path/to/claude_openapi_skill
+/plugin install openapi-reader@basanets-plugins
+/reload-plugins
+```
+
+Use this mode when hacking on the plugin itself — `/plugin marketplace update basanets-plugins` refreshes against your local working tree.
+
+### Manual copy (legacy fallback)
+
+For Claude Code versions predating `/plugin`, download `dist/openapi-reader.zip` and unpack into your project:
 
 ```bash
 unzip openapi-reader.zip
 cp -r openapi-reader/{.claude-plugin,skills,commands,scripts} .
 rm -rf openapi-reader/
 ```
-
-Your spec must be named `openapi.json` in the project root, or pass `--spec PATH` explicitly.
 
 ## Usage
 

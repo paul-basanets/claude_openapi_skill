@@ -24,3 +24,5 @@ requires-python = ">=3.14"
 dependencies = []
 ```
 
+The repo root also acts as a Claude Code plugin marketplace named `basanets-plugins` via `.claude-plugin/marketplace.json`, which points `openapi-reader` at `./src/openapi-reader`. Do not rename or relocate that file — `/plugin marketplace add` and auto-update rely on it.
+
