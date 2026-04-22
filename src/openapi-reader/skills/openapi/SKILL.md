@@ -4,12 +4,18 @@ description: This skill should be used when the user asks to "query the API spec
   "show available endpoints", "what endpoints are available", "read the openapi",
   "get the schema for", "search the API spec", "look up operationId", or when writing
   code that calls an API defined by an openapi.json file in the project.
-version: 0.5.2
+version: 0.5.3
 ---
 
 # OpenAPI Skill
 
-Query OpenAPI specs without loading the full file into context. Use `uv run "$CLAUDE_PLUGIN_ROOT/scripts/openapi_tool.py"` via the Bash tool.
+Query OpenAPI specs without loading the full file into context. Use the Bash tool with this snippet (handles missing `$CLAUDE_PLUGIN_ROOT`):
+
+```bash
+_script="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts/openapi_tool.py}"
+_script="${_script:-$(ls ~/.claude/plugins/cache/basanets-plugins/openapi-reader/*/scripts/openapi_tool.py 2>/dev/null | sort -V | tail -1)}"
+uv run "$_script" [global flags] <subcommand> [args]
+```
 
 ## Subcommands
 
