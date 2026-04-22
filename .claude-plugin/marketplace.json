@@ -1,0 +1,19 @@
+{
+  "name": "basanets-plugins",
+  "owner": {
+    "name": "Paul Basanets",
+    "email": "paulbasanets@gmail.com"
+  },
+  "metadata": {
+    "description": "Personal Claude Code plugins by Paul Basanets."
+  },
+  "plugins": [
+    {
+      "name": "openapi-reader",
+      "source": "./src/openapi-reader",
+      "description": "Token-efficient, on-demand access to OpenAPI specifications (TOON output, compact trimming, typo suggestions).",
+      "category": "development",
+      "keywords": ["openapi", "api", "toon", "tokens"]
+    }
+  ]
+}
