@@ -45,13 +45,6 @@ uv run src/openapi-reader/scripts/openapi_tool.py endpoint POST /api/resource/ad
 uv run src/openapi-reader/scripts/openapi_tool.py schema ResourceResponse
 ```
 
-## Evaluation
-
-```bash
-uv run evals/run_eval.py
-# → runs 12 UX scenarios, measures all 89 endpoints + 160 schemas, regenerates docs/EVAL.md
-```
-
 ## Build
 
 ```bash
