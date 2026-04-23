@@ -25,7 +25,7 @@ No dependencies are currently declared. The `pyproject.toml` is minimal:
 ```toml
 [project]
 name = "openapi-skill"
-version = "0.5.4"
+version = "0.5.5"
 requires-python = ">=3.9"
 dependencies = []
 ```

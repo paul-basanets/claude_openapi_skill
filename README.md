@@ -23,7 +23,7 @@ See [`src/openapi-reader/README.md#installation`](src/openapi-reader/README.md#i
 ```
 .claude-plugin/         marketplace catalog (basanets-plugins)
 src/openapi-reader/     plugin source (see its README for usage)
-├── .claude-plugin/     plugin manifest (v0.5.4)
+├── .claude-plugin/     plugin manifest (v0.5.5)
 ├── commands/           /openapi slash command
 ├── scripts/            openapi_tool.py — zero-dep Python CLI + TOON encoder
 └── skills/openapi/     skill guidance + query-patterns reference
