@@ -65,21 +65,21 @@ Use this mode when hacking on the plugin itself — `/plugin marketplace update 
 ### Direct CLI
 
 ```bash
-uv run scripts/openapi_tool.py summary
-uv run scripts/openapi_tool.py summary --compact                 # paths-only overview
-uv run scripts/openapi_tool.py list --tag TAG --method GET
-uv run scripts/openapi_tool.py endpoint METHOD PATH
-uv run scripts/openapi_tool.py schema NAME
-uv run scripts/openapi_tool.py search QUERY
-uv run scripts/openapi_tool.py operation OPERATION_ID
-uv run scripts/openapi_tool.py --spec path/to/spec.json summary
-uv run scripts/openapi_tool.py --spec https://api.example.com/openapi.json summary   # remote spec (cached 1h)
-uv run scripts/openapi_tool.py --spec https://api.example.com/openapi.json --refresh summary   # force re-fetch
-uv run scripts/openapi_tool.py --depth 1 endpoint METHOD PATH    # shallow $ref resolution
-uv run scripts/openapi_tool.py --raw endpoint METHOD PATH        # disable junk trimming
+python scripts/openapi_tool.py summary
+python scripts/openapi_tool.py summary --compact                 # paths-only overview
+python scripts/openapi_tool.py list --tag TAG --method GET
+python scripts/openapi_tool.py endpoint METHOD PATH
+python scripts/openapi_tool.py schema NAME
+python scripts/openapi_tool.py search QUERY
+python scripts/openapi_tool.py operation OPERATION_ID
+python scripts/openapi_tool.py --spec path/to/spec.json summary
+python scripts/openapi_tool.py --spec https://api.example.com/openapi.json summary   # remote spec (cached 1h)
+python scripts/openapi_tool.py --spec https://api.example.com/openapi.json --refresh summary   # force re-fetch
+python scripts/openapi_tool.py --depth 1 endpoint METHOD PATH    # shallow $ref resolution
+python scripts/openapi_tool.py --raw endpoint METHOD PATH        # disable junk trimming
 ```
 
-Global flags (`--spec`, `--depth`, `--raw`) must precede the subcommand.
+Global flags (`--spec`, `--depth`, `--raw`) must precede the subcommand. On Linux/macOS setups where the bare `python` alias isn't provided, use `python3`; on Windows, `python` is canonical (Git Bash / cmd / PowerShell all agree).
 
 ### Skill
 
@@ -111,5 +111,5 @@ items[2]:
 
 ## Requirements
 
-- Python 3.11+ (no external dependencies)
-- `uv` on PATH
+- Python 3.9+ (no external dependencies — stdlib only)
+- Works on macOS, Linux, and Windows (Git Bash, which is Claude Code's default Bash on Windows)

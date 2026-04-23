@@ -1,5 +1,5 @@
 {
   "name": "openapi-reader",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Token-efficient, on-demand access to OpenAPI specifications. TOON output format (~20-35% smaller than JSON), compact junk-trimming by default (--raw to disable), --depth N for shallower views, summary --compact for paths-only overview, typo suggestions on unknown schema/operation lookups."
 }

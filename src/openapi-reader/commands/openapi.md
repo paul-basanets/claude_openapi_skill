@@ -8,9 +8,7 @@ allowed-tools:
 Parse the subcommand and arguments from the `/openapi` invocation, then run:
 
 ```bash
-_script="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts/openapi_tool.py}"
-_script="${_script:-$(ls ~/.claude/plugins/cache/basanets-plugins/openapi-reader/*/scripts/openapi_tool.py 2>/dev/null | sort -V | tail -1)}"
-uv run "$_script" [--spec PATH_OR_URL] [--refresh] [--raw] [--depth N] <subcommand> [args]
+python "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT is unset — reinstall the openapi-reader plugin}/scripts/openapi_tool.py" [--spec PATH_OR_URL] [--refresh] [--raw] [--depth N] <subcommand> [args]
 ```
 
 Global flags go **before** the subcommand:
@@ -24,4 +22,4 @@ Present the result clearly. For `summary`, display as-is. For TOON output (`list
 
 If a schema / operationId miss returns `did_you_mean`, suggest the top match to the user rather than re-issuing the failing call.
 
-If `openapi.json` is not found, suggest running with `--spec` before the subcommand — either a local path or a URL, e.g. `uv run "$_script" --spec path/to/spec.json summary` or `--spec https://api.example.com/openapi.json summary` (where `$_script` is resolved as above).
+If `openapi.json` is not found, suggest running with `--spec` before the subcommand — either a local path or a URL, e.g. `python "$CLAUDE_PLUGIN_ROOT/scripts/openapi_tool.py" --spec path/to/spec.json summary` or `--spec https://api.example.com/openapi.json summary`.

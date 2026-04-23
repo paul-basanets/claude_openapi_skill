@@ -8,19 +8,25 @@ This project is building a Claude skill for efficiently reading and querying Ope
 
 ## Project Setup
 
+Python 3.9+ required. The tool is stdlib-only, so a venv is optional for running it — only useful when doing dev work (linters, eval harness, etc.).
+
 ```bash
-# Python 3.11+ required
-python -m venv .venv
-source .venv/bin/activate
+# macOS / Linux
+python -m venv .venv && source .venv/bin/activate
+
+# Windows (Git Bash, which Claude Code uses)
+python -m venv .venv && source .venv/Scripts/activate
 ```
+
+On Linux/macOS setups that only ship `python3`, substitute it for `python`.
 
 No dependencies are currently declared. The `pyproject.toml` is minimal:
 
 ```toml
 [project]
 name = "openapi-skill"
-version = "0.5.3"
-requires-python = ">=3.11"
+version = "0.5.4"
+requires-python = ">=3.9"
 dependencies = []
 ```
 

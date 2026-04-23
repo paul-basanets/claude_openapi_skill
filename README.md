@@ -23,7 +23,7 @@ See [`src/openapi-reader/README.md#installation`](src/openapi-reader/README.md#i
 ```
 .claude-plugin/         marketplace catalog (basanets-plugins)
 src/openapi-reader/     plugin source (see its README for usage)
-├── .claude-plugin/     plugin manifest (v0.5.1)
+├── .claude-plugin/     plugin manifest (v0.5.4)
 ├── commands/           /openapi slash command
 ├── scripts/            openapi_tool.py — zero-dep Python CLI + TOON encoder
 └── skills/openapi/     skill guidance + query-patterns reference
@@ -36,18 +36,27 @@ dist/                   build output
 
 ## Development
 
+The tool is stdlib-only, so no venv is required to run it — `python` is enough. A venv is only useful for dev work (linters, the eval harness, etc.):
+
 ```bash
+# macOS / Linux
 python -m venv .venv && source .venv/bin/activate
 
-# Test the CLI against the fixture
-uv run src/openapi-reader/scripts/openapi_tool.py summary
-uv run src/openapi-reader/scripts/openapi_tool.py endpoint POST /api/resource/add
-uv run src/openapi-reader/scripts/openapi_tool.py schema ResourceResponse
+# Windows (Git Bash, which Claude Code uses)
+python -m venv .venv && source .venv/Scripts/activate
+```
+
+Then test the CLI against the fixture (use `python3` on Linux/macOS systems where the `python` alias isn't provided):
+
+```bash
+python src/openapi-reader/scripts/openapi_tool.py summary
+python src/openapi-reader/scripts/openapi_tool.py endpoint POST /api/resource/add
+python src/openapi-reader/scripts/openapi_tool.py schema ResourceResponse
 ```
 
 ## Build
 
 ```bash
-uv run bundle.py
+python bundle.py
 # → dist/openapi-reader.zip
 ```
